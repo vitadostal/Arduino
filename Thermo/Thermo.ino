@@ -2,7 +2,6 @@
 //Chip ESP8266 + sensor DHT11
 //Vitezslav Dostal | started 27.01.2017
 
-#include <TimeLib.h>
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -13,15 +12,14 @@
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include "SSD1306Brzo.h"
-#include "OLEDDisplayUi.h"
 #include "images.h"
 #include "Timer.h"
 
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
-      String key             = "<from-eeprom>";                        //API write key
-const String firmware        = "v1.04 / 4 Mar 2017" ;     //Firmware version
+      String key             = "<from-eeprom>";           //API write key
+const String firmware        = "v1.05 / 5 Mar 2017" ;     //Firmware version
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
 const int    pause           = 0.1;                       //Next measure on error (in seconds)
@@ -31,26 +29,21 @@ const char*  update_path     = "/firmware";               //Firmware update path
       String update_username = "<from-eeprom>";           //Firmware update login
       String update_password = "<from-eeprom>";           //Firmware update password
 
-int          screenW         = 128;
-int          screenH         = 64;
-int          clockCenterX    = screenW / 2;
-int          clockCenterY    = ((screenH - 16) / 2) + 16; // top yellow part is 16 px height
-int          clockRadius     = 23;
-
-const int    offset          = 360;
+const int    offset          = 360;                       //EEPROM memory offset
+const bool   displayUsed     = true;                      //Display enabled
 
 #define ONE_WIRE_BUS_PIN     0                            //Dallas DS18B20 DATA
-#define DISPLAY_SDA          1                            //SSD1306 SCL
+#define DISPLAY_SDA          1                            //SSD1306 sDATA
 #define DHT_PIN              2                            //DHT11 DATA
-#define DISPLAY_SCL          3                            //SSD1306 SDA
-#define DHT_TYPE DHT11
-#define DISPLAY_ADDRESS 0x3c
+#define DISPLAY_SCL          3                            //SSD1306 sCLOCK
+
+#define DHT_TYPE             DHT11                        //DHT module type
+#define DISPLAY_ADDRESS      0x3c                         //SSD1306 128x64 display support only
 
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
 DHT dht(DHT_PIN, DHT_TYPE);
 SSD1306Brzo display(DISPLAY_ADDRESS, DISPLAY_SDA, DISPLAY_SCL);
-OLEDDisplayUi ui (&display);
 OneWire oneWire(ONE_WIRE_BUS_PIN);
 DallasTemperature dallas(&oneWire);
 Timer t;
@@ -66,8 +59,13 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 }
 
 void setup() {    
+  //Display
+  if (displayUsed) Serial.println("Starting display...");
+  if (displayUsed) setupDisplay();
+  if (displayUsed) drawProgressBar(10);
+
   //Initialization
-  Serial.begin(115200);
+  if (!displayUsed) Serial.begin(115200);
   delay(10);
   dht.begin();
   delay(10);
@@ -75,35 +73,45 @@ void setup() {
   delay(10);
   Serial.println();
   Serial.println();
+  if (displayUsed) drawProgressBar(20);  
 
   //Read memory
   Serial.println("Reading EEPROM memory...");
   readMemory();
+  if (displayUsed) drawProgressBar(30);  
 
   //Info memory
   infoMemory();
+  if (displayUsed) drawProgressBar(40);  
   
   //Hostname
   host = host_prefix + sensor;
   host.toLowerCase();
   Serial.println("My hostname is " + host);
+  if (displayUsed) drawProgressBar(50);
     
   //WiFi manager
   Serial.println("Starting WiFi manager...");
+  if (displayUsed) drawWiFi();
   setupWifi();
+  if (displayUsed) drawProgressBar(60);  
 
   //Server
   Serial.println("Starting WebServer...");
   setupWebServer();
+  if (displayUsed) drawProgressBar(70);  
 
-  //Display
-  Serial.println("Starting display...");
-  //setupDisplay();
-
+  //Timer
   t.every(interval * 1000, takeReading, 0);
-  //t.every(    0.01 * 1000, handleServer, 0);
-  //t.every(    0.01 * 1000, handleDisplay, 0);
+  //t.every(  0.01 * 1000, handleServer, 0);
+
+  //Setup done
+  if (displayUsed) drawProgressBar(100);
+  float t_dal, h_dal, t_dht, h_dht;
+  readSensors(t_dal, h_dal, t_dht, h_dht);
 }
+
+void* callback() {}
 
 void infoMemory()
 {  
@@ -167,17 +175,43 @@ void setupWebServer()
 
 void setupDisplay()
 {
-  //Display WiFi icon
-  ui.setTargetFPS(60);
-  ui.setActiveSymbol(activeSymbol);
-  ui.setInactiveSymbol(inactiveSymbol);
-  ui.setIndicatorPosition(TOP);
-  ui.setIndicatorDirection(LEFT_RIGHT);
-  ui.setFrameAnimation(SLIDE_LEFT);
-  FrameCallback frames[] = {digitalClockFrame, temperatureFrame};
-  ui.setFrames(frames, 2);
-  ui.init();
+  display.init();
   display.flipScreenVertically();
+}
+
+void drawProgressBar(int progress) {
+  display.clear();
+  display.drawProgressBar(0, 32, 120, 10, progress);
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64, 15, String(progress) + "%");
+  display.display();
+}
+
+void drawValues(float t_dal, float h_dht)
+{
+  char show[10];
+  String out;
+  dtostrf(t_dal, 0, 1, show);
+  out = String(show) + " °C";
+  /*if (!isnan(h_dht))
+  {
+    dtostrf(h_dht, 0, 0, show);
+    out += " " + String(show);
+    out += " %";
+  }*/
+  
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_24);
+  display.drawString(64, 20, out);
+  display.display();
+}
+
+void drawWiFi() {
+  display.clear();
+  display.drawXbm(34, 14, WiFiLogoWidth, WiFiLogoHeight, WiFiLogoBits);
+  display.display();
 }
 
 void loop()
@@ -191,37 +225,25 @@ void handleServer(void* context)
   httpServer.handleClient();
 }
 
-void handleDisplay(void* context)
+void readSensors(float &t_dal, float &h_dal, float &t_dht, float &h_dht)
 {
-  int remainingTimeBudget = ui.update();
-  if (remainingTimeBudget > 0) delay(remainingTimeBudget);
-}
+  //Get data
+  readSensorDallas (t_dal, h_dal);
+  readSensorDHT (t_dht, h_dht);
+  if (isnan(t_dal)) {
+    t_dal = t_dht;
+    t_dht = NAN;
+  }
 
-void digitalClockFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
-{
-  String timenow = String(hour()) + ":" + twoDigits(minute()) + ":" + twoDigits(second());
-  display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->setFont(ArialMT_Plain_24);
-  display->drawString(clockCenterX + x , clockCenterY + y, timenow );
-}
-
-void temperatureFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y)
-{
-  display->drawString(64 + x, 32 + y, "20.8 °C");
+  //Show on display
+  drawValues(t_dal, h_dht);
 }
 
 void takeReading(void* context)
 {
   Serial.println();
-
   float t_dal, h_dal, t_dht, h_dht;
-  readSensorDallas (t_dal, h_dal);
-  readSensorDHT (t_dht, h_dht);
-
-  if (isnan(t_dal)) {
-    t_dal = t_dht;
-    t_dht = NAN;
-  }
+  readSensors(t_dal, h_dal, t_dht, h_dht);
 
   //Push data to server
   Serial.println("Connecting to server " + String(server) + "...");
@@ -309,12 +331,12 @@ String deviceStatus() {
   info += ("<br />");
 
   float t1, h1, t2, h2;
-  readSensorDallas(t2, h2);
-  info += ("<b>DS18B20 Reading:</b> " + String(t2) + "&#8451; ");
+  readSensors(t2, h2, t1, h1);
+  info += ("<b>DS18B20 Readings:</b> " + String(t2) + "&#8451; ");
   info += ("<br />");
-  readSensorDHT(t1, h1);
-  info += ("<b>DHT11 Reading:</b> " + String(t1) + "&#8451; " + String(h1) + "%");
+  info += ("<b>DHT11 Readings:</b> " + String(t1) + "&#8451; " + String(h1) + "%");
   info += ("<br />");
+  
 
   info += ("<b>Firmware:</b> ");
   info += (firmware);
@@ -394,12 +416,3 @@ String mac2String(byte ar[]) {
   return s;
 }
 
-String twoDigits(int digits) {
-  if (digits < 10) {
-    String i = '0' + String(digits);
-    return i;
-  }
-  else {
-    return String(digits);
-  }
-}

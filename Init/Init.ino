@@ -1,5 +1,5 @@
 //New board initializer
-//Chip ESP8266
+//Use this sketch to fill the EEPROM memory with appropriate values (sensor, key, admin login, admin password)
 //Vitezslav Dostal | started 03.03.2017
 
 #include <EEPROM.h>
@@ -10,10 +10,11 @@
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>
 
-const char* sensor = "<5char>";
-const char* key    = "<enter>";
-const char* login  = "admin";
-const char* passwd = "<enter>";
+const char* sensor = "<5-uppercase-chars>";
+const char* key    = "<enter-server-key>";
+const char* login  = "<enter-your-login>";
+const char* passwd = "<enter-your-password>";
+
       char* host   = "initial";
 const int   offset = 360;
 
