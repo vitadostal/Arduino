@@ -19,7 +19,7 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.05 / 5 Mar 2017" ;     //Firmware version
+const String firmware        = "v1.06 / 5 Mar 2017" ;     //Firmware version
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
 const int    pause           = 0.1;                       //Next measure on error (in seconds)
@@ -30,7 +30,7 @@ const char*  update_path     = "/firmware";               //Firmware update path
       String update_password = "<from-eeprom>";           //Firmware update password
 
 const int    offset          = 360;                       //EEPROM memory offset
-const bool   displayUsed     = true;                      //Display enabled
+const bool   displayUsed     = true;                      //Display enabled, otherwise use console link
 
 #define ONE_WIRE_BUS_PIN     0                            //Dallas DS18B20 DATA
 #define DISPLAY_SDA          1                            //SSD1306 sDATA
@@ -47,6 +47,7 @@ SSD1306Brzo display(DISPLAY_ADDRESS, DISPLAY_SDA, DISPLAY_SCL);
 OneWire oneWire(ONE_WIRE_BUS_PIN);
 DallasTemperature dallas(&oneWire);
 Timer t;
+unsigned long lastExecutionTime;
 String host;
 
 template <class T> int EEPROM_readAnything(int ee, T& value)
@@ -59,10 +60,14 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 }
 
 void setup() {    
-  //Display
-  if (displayUsed) Serial.println("Starting display...");
-  if (displayUsed) setupDisplay();
-  if (displayUsed) drawProgressBar(10);
+  //Display bomb for great start
+  if (displayUsed)
+  {
+    Serial.println("Starting display...");
+    setupDisplay();
+    drawBomb();
+    delay(1000);
+  }
 
   //Initialization
   if (!displayUsed) Serial.begin(115200);
@@ -103,15 +108,26 @@ void setup() {
 
   //Timer
   t.every(interval * 1000, takeReading, 0);
+  t.every(       1 * 1000, updateExecutionTime, 0);
   //t.every(  0.01 * 1000, handleServer, 0);
 
   //Setup done
   if (displayUsed) drawProgressBar(100);
   float t_dal, h_dal, t_dht, h_dht;
   readSensors(t_dal, h_dal, t_dht, h_dht);
+  lastExecutionTime = millis();
 }
 
-void* callback() {}
+void loop()
+{
+  t.update();
+  httpServer.handleClient();
+}
+
+void handleServer(void* context)
+{
+  httpServer.handleClient();
+}
 
 void infoMemory()
 {  
@@ -186,6 +202,12 @@ void drawProgressBar(int progress) {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(64, 15, String(progress) + "%");
   display.display();
+  delay(100);
+}
+
+void drawBottomProgressBar(int progress) {
+  display.drawProgressBar(0, 40, 120, 10, progress);
+  display.display();
 }
 
 void drawValues(float t_dal, float h_dht)
@@ -204,7 +226,7 @@ void drawValues(float t_dal, float h_dht)
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_24);
-  display.drawString(64, 20, out);
+  display.drawString(64, 10, out);
   display.display();
 }
 
@@ -214,19 +236,22 @@ void drawWiFi() {
   display.display();
 }
 
-void loop()
-{
-  t.update();
-  httpServer.handleClient();
+void drawBomb() {
+  display.clear();
+  display.drawXbm(32, 0, bombWidth, bombHeight, bombBits);
+  display.display();
 }
 
-void handleServer(void* context)
-{
-  httpServer.handleClient();
+void drawComputer() {
+  display.clear();
+  display.drawXbm(48, 16, computerWidth, computerHeight, computerBits);
+  display.display();
 }
 
 void readSensors(float &t_dal, float &h_dal, float &t_dht, float &h_dht)
 {
+  drawComputer();
+  
   //Get data
   readSensorDallas (t_dal, h_dal);
   readSensorDHT (t_dht, h_dht);
@@ -239,8 +264,17 @@ void readSensors(float &t_dal, float &h_dal, float &t_dht, float &h_dht)
   drawValues(t_dal, h_dht);
 }
 
+void updateExecutionTime(void* context)
+{
+  int progress = round((float(millis() - lastExecutionTime) / ((float)interval * 10)) * 1.03);
+  if (progress > 100) progress = 100;
+  drawBottomProgressBar(progress);
+}
+
 void takeReading(void* context)
 {
+  lastExecutionTime = millis();
+  
   Serial.println();
   float t_dal, h_dal, t_dht, h_dht;
   readSensors(t_dal, h_dal, t_dht, h_dht);
@@ -336,7 +370,6 @@ String deviceStatus() {
   info += ("<br />");
   info += ("<b>DHT11 Readings:</b> " + String(t1) + "&#8451; " + String(h1) + "%");
   info += ("<br />");
-  
 
   info += ("<b>Firmware:</b> ");
   info += (firmware);
