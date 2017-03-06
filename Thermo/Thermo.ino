@@ -19,7 +19,7 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.06 / 5 Mar 2017" ;     //Firmware version
+const String firmware        = "v1.07 / 6 Mar 2017" ;     //Firmware version
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
 const int    pause           = 0.1;                       //Next measure on error (in seconds)
@@ -60,12 +60,12 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 }
 
 void setup() {    
-  //Display bomb for great start
+  //Init display
   if (displayUsed)
   {
     Serial.println("Starting display...");
     setupDisplay();
-    drawBomb();
+    drawVD();
     delay(1000);
   }
 
@@ -197,16 +197,16 @@ void setupDisplay()
 
 void drawProgressBar(int progress) {
   display.clear();
-  display.drawProgressBar(0, 32, 120, 10, progress);
+  display.drawProgressBar(0, 52, 127, 10, progress);
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(64, 15, String(progress) + "%");
+  display.drawString(64, 39, String(progress) + "%");
   display.display();
   delay(100);
 }
 
 void drawBottomProgressBar(int progress) {
-  display.drawProgressBar(0, 40, 120, 10, progress);
+  display.drawProgressBar(0, 40, 127, 10, progress);
   display.display();
 }
 
@@ -215,7 +215,11 @@ void drawValues(float t_dal, float h_dht)
   char show[10];
   String out;
   dtostrf(t_dal, 0, 1, show);
-  out = String(show) + " °C";
+  if (!isnan(t_dal))
+    out = String(show) + " °C";
+  else
+    out = "< ERROR >";
+
   /*if (!isnan(h_dht))
   {
     dtostrf(h_dht, 0, 0, show);
@@ -231,14 +235,13 @@ void drawValues(float t_dal, float h_dht)
 }
 
 void drawWiFi() {
-  display.clear();
-  display.drawXbm(34, 14, WiFiLogoWidth, WiFiLogoHeight, WiFiLogoBits);
+  display.drawXbm(34, 0, WiFiLogoWidth, WiFiLogoHeight, WiFiLogoBits);
   display.display();
 }
 
-void drawBomb() {
+void drawVD() {
   display.clear();
-  display.drawXbm(32, 0, bombWidth, bombHeight, bombBits);
+  display.drawXbm(32, 0, vdWidth, vdHeight, vdBits);
   display.display();
 }
 
@@ -248,20 +251,20 @@ void drawComputer() {
   display.display();
 }
 
-void readSensors(float &t_dal, float &h_dal, float &t_dht, float &h_dht)
+float readSensors(float &t_dal, float &h_dal, float &t_dht, float &h_dht)
 {
   drawComputer();
+  float t = NAN;
   
   //Get data
   readSensorDallas (t_dal, h_dal);
   readSensorDHT (t_dht, h_dht);
-  if (isnan(t_dal)) {
-    t_dal = t_dht;
-    t_dht = NAN;
-  }
+  if (!isnan(t_dht)) t = t_dht;
+  if (!isnan(t_dal)) t = t_dal;
 
   //Show on display
-  drawValues(t_dal, h_dht);
+  drawValues(t, h_dht);
+  return t;
 }
 
 void updateExecutionTime(void* context)
@@ -278,6 +281,10 @@ void takeReading(void* context)
   Serial.println();
   float t_dal, h_dal, t_dht, h_dht;
   readSensors(t_dal, h_dal, t_dht, h_dht);
+  if (isnan(t_dal)) {
+    t_dal = t_dht;
+    t_dht = NAN;
+  }
 
   //Push data to server
   Serial.println("Connecting to server " + String(server) + "...");
