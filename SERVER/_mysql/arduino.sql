@@ -3,9 +3,9 @@
 -- http://www.phpmyadmin.net
 --
 -- Host: localhost
--- Generation Time: Mar 05, 2017 at 04:34 PM
--- Server version: 5.5.53
--- PHP Version: 5.5.9-1ubuntu4.21
+-- Generation Time: Mar 18, 2017 at 10:53 PM
+-- Server version: 5.7.17
+-- PHP Version: 5.6.30-7+deb.sury.org~xenial+1
 
 SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 SET time_zone = "+00:00";
@@ -19,6 +19,19 @@ SET time_zone = "+00:00";
 --
 -- Database: `arduino`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `graph`
+--
+
+CREATE TABLE IF NOT EXISTS `graph` (
+  `id` char(1) COLLATE utf8_czech_ci NOT NULL,
+  `description` varchar(30) COLLATE utf8_czech_ci NOT NULL,
+  `unit` varchar(5) COLLATE utf8_czech_ci NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_czech_ci;
 
 -- --------------------------------------------------------
 
@@ -40,7 +53,7 @@ CREATE TABLE IF NOT EXISTS `measure` (
   `text3` varchar(32) COLLATE utf8_czech_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `timestamp` (`timestamp`,`sensor`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_czech_ci AUTO_INCREMENT=142364 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_czech_ci;
 
 -- --------------------------------------------------------
 
@@ -69,7 +82,7 @@ CREATE TABLE IF NOT EXISTS `program` (
   `max` float DEFAULT NULL,
   `timestamp` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_czech_ci AUTO_INCREMENT=1400 ;
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_czech_ci;
 
 -- --------------------------------------------------------
 
@@ -80,7 +93,21 @@ CREATE TABLE IF NOT EXISTS `program` (
 CREATE TABLE IF NOT EXISTS `sensor` (
   `sensor` varchar(5) COLLATE utf8_czech_ci NOT NULL,
   `comment` varchar(64) COLLATE utf8_czech_ci NOT NULL,
-  `color` varchar(7) COLLATE utf8_czech_ci NOT NULL,
+  `color1` varchar(7) COLLATE utf8_czech_ci NOT NULL,
+  `color2` varchar(7) COLLATE utf8_czech_ci NOT NULL,
+  `color3` varchar(7) COLLATE utf8_czech_ci NOT NULL,
+  `color4` varchar(7) COLLATE utf8_czech_ci NOT NULL,
+  `color5` varchar(7) COLLATE utf8_czech_ci NOT NULL,
+  `graph1` char(1) COLLATE utf8_czech_ci NOT NULL,
+  `graph2` char(1) COLLATE utf8_czech_ci NOT NULL,
+  `graph3` char(1) COLLATE utf8_czech_ci NOT NULL,
+  `graph4` char(1) COLLATE utf8_czech_ci NOT NULL,
+  `graph5` char(1) COLLATE utf8_czech_ci NOT NULL,
+  `sufix1` varchar(20) COLLATE utf8_czech_ci NOT NULL,
+  `sufix2` varchar(20) COLLATE utf8_czech_ci NOT NULL,
+  `sufix3` varchar(20) COLLATE utf8_czech_ci NOT NULL,
+  `sufix4` varchar(20) COLLATE utf8_czech_ci NOT NULL,
+  `sufix5` varchar(20) COLLATE utf8_czech_ci NOT NULL,
   `visible` tinyint(1) NOT NULL,
   `implicit` tinyint(1) NOT NULL,
   PRIMARY KEY (`sensor`)
