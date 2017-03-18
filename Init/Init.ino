@@ -1,5 +1,5 @@
 //New board initializer
-//Use this sketch to fill the EEPROM memory with appropriate values (sensor, key, admin login, admin password)
+//Use this sketch to fill the EEPROM memory with appropriate values
 //Vitezslav Dostal | started 03.03.2017
 
 #include <EEPROM.h>
@@ -10,10 +10,17 @@
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>
 
-const char* sensor = "<5-uppercase-chars>";
-const char* key    = "<enter-server-key>";
-const char* login  = "<enter-your-login>";
-const char* passwd = "<enter-your-password>";
+const char* sensor       = "<5-uppercase-chars>";  //Sensor indentification
+const char* key          = "<enter-server-key>";   //API write key
+const char* adminLogin   = "admin";                //Update firmware login
+const char* adminPasswd  = "admin";                //Update firmware password
+const char* wifiLogin    = "<enter-wifi-login>";   //Wifi login (projects without WiFi manager only)
+const char* wifiPasswd   = "<enter-wifi-passwd>";  //Wifi password (projects without WiFi manager only)
+const char  serialUsed   = true;                   //Console connected
+const char  displayUsed  = true;                   //Display connected
+const char  dallasUsed   = true;                   //Dallas sensor connected
+const char  dhtUsed      = true;                   //DHT sensor connected
+const char  dhtType      = 11;                     //DHT sensor used
 
       char* host   = "initial";
 const int   offset = 360;
@@ -27,28 +34,35 @@ byte value, value1, value2, value3, value4, value5, value6, value7, value8, valu
 
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
 {
-    const byte* p = (const byte*)(const void*)&value;
-    unsigned int i;
-    for (i = 0; i < sizeof(value); i++)
-          EEPROM.write(ee++, *p++);
-    return i;
+  const byte* p = (const byte*)(const void*)&value;
+  unsigned int i;
+  for (i = 0; i < sizeof(value); i++)
+    EEPROM.write(ee++, *p++);
+  return i;
 }
 
 template <class T> int EEPROM_readAnything(int ee, T& value)
 {
-    byte* p = (byte*)(void*)&value;
-    unsigned int i;
-    for (i = 0; i < sizeof(value); i++)
-          *p++ = EEPROM.read(ee++);
-    return i;
+  byte* p = (byte*)(void*)&value;
+  unsigned int i;
+  for (i = 0; i < sizeof(value); i++)
+    *p++ = EEPROM.read(ee++);
+  return i;
 }
 
 struct config_t
 {
-    char  sensor[20];
-    char  key[20];           
-    char  login[20];
-    char  passwd[20];
+  char  sensor[20];
+  char  key[20];           
+  char  adminLogin[20];
+  char  adminPasswd[20];
+  char  wifiLogin[20];
+  char  wifiPasswd[20];
+  char  serialUsed;
+  char  displayUsed;
+  char  dallasUsed;
+  char  dhtUsed;
+  char  dhtType;
 } memory, data;
 
 void setup()
@@ -67,10 +81,17 @@ void setup()
 
 void write()
 {
-  strcpy(memory.sensor, sensor);
-  strcpy(memory.key,    key);
-  strcpy(memory.login,  login);
-  strcpy(memory.passwd, passwd);
+  strcpy(memory.sensor,      sensor);
+  strcpy(memory.key,         key);
+  strcpy(memory.adminLogin,  adminLogin);
+  strcpy(memory.adminPasswd, adminPasswd);
+  strcpy(memory.wifiLogin,   wifiLogin);
+  strcpy(memory.wifiPasswd,  wifiPasswd);
+  memory.serialUsed        = serialUsed;
+  memory.displayUsed       = displayUsed;
+  memory.dallasUsed        = dallasUsed;
+  memory.dhtUsed           = dhtUsed;
+  memory.dhtType           = dhtType;
   EEPROM_writeAnything(offset, memory);
   EEPROM.commit();
 }
@@ -83,8 +104,10 @@ void read()
   Serial.println("=====================");
   Serial.println(data.sensor);
   Serial.println(data.key);
-  Serial.println(data.login);
-  Serial.println(data.passwd);
+  Serial.println(data.adminLogin);
+  Serial.println(data.adminPasswd);
+  Serial.println(data.wifiLogin);
+  Serial.println(data.wifiPasswd);
   Serial.println("=====================");
 }
 
