@@ -1,5 +1,5 @@
-//Sends temperature and humidity over WiFi to specified server via GET/POST request
-//Chip ESP8266 + sensor DHT11
+//Sends temperature and humidity over WiFi to specified server via POST request
+//Chip ESP8266 + sensor DHT + sensor DALLAS + display SSD1306
 //Vitezslav Dostal | started 27.01.2017
 
 #include <EEPROM.h>
@@ -19,7 +19,8 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.07 / 6 Mar 2017" ;     //Firmware version
+const String firmware        = "v1.08 / 18 Mar 2017" ;    //Firmware version
+const int    offset          = 360;                       //EEPROM memory offset
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
 const int    pause           = 0.1;                       //Next measure on error (in seconds)
@@ -29,22 +30,23 @@ const char*  update_path     = "/firmware";               //Firmware update path
       String update_username = "<from-eeprom>";           //Firmware update login
       String update_password = "<from-eeprom>";           //Firmware update password
 
-const int    offset          = 360;                       //EEPROM memory offset
-const bool   displayUsed     = true;                      //Display enabled, otherwise use console link
+      byte   serialUsed      = 255;                       //Console connected (255 = from EEPROM)
+      byte   displayUsed     = 255;                       //Display connected
+      byte   dallasUsed      = 255;                       //Dallas sensor connected
+      byte   dhtUsed         = 255;                       //DHT sensor connected
+      int    dhtType         = 255;                       //DHT sensor used
 
-#define ONE_WIRE_BUS_PIN     0                            //Dallas DS18B20 DATA
+#define DALLAS_PIN           0                            //Dallas DS18B20 DATA
 #define DISPLAY_SDA          1                            //SSD1306 sDATA
 #define DHT_PIN              2                            //DHT11 DATA
 #define DISPLAY_SCL          3                            //SSD1306 sCLOCK
-
-#define DHT_TYPE             DHT11                        //DHT module type
 #define DISPLAY_ADDRESS      0x3c                         //SSD1306 128x64 display support only
 
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
-DHT dht(DHT_PIN, DHT_TYPE);
+DHT dht(0, 0);
 SSD1306Brzo display(DISPLAY_ADDRESS, DISPLAY_SDA, DISPLAY_SCL);
-OneWire oneWire(ONE_WIRE_BUS_PIN);
+OneWire oneWire(DALLAS_PIN);
 DallasTemperature dallas(&oneWire);
 Timer t;
 unsigned long lastExecutionTime;
@@ -60,29 +62,39 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 }
 
 void setup() {    
+
+  //Read memory
+  readMemory();
+
+  //Init serial line
+  if ((!displayUsed || DISPLAY_SDA != 1) && serialUsed)
+  {
+    Serial.begin(115200);
+    Serial.println();
+    Serial.println();    
+  }
+  
   //Init display
   if (displayUsed)
   {
     Serial.println("Starting display...");
-    setupDisplay();
+    display.init();
+    display.flipScreenVertically();
     drawVD();
     delay(1000);
   }
 
-  //Initialization
-  if (!displayUsed) Serial.begin(115200);
-  delay(10);
-  dht.begin();
-  delay(10);
-  dallas.begin();
-  delay(10);
-  Serial.println();
-  Serial.println();
+  //Init Dallas
+  if (dallasUsed) dallas.begin();
   if (displayUsed) drawProgressBar(20);  
 
-  //Read memory
-  Serial.println("Reading EEPROM memory...");
-  readMemory();
+  //Init DHT
+  if (dhtUsed)
+  {
+    DHT* dht_replace = new DHT(DHT_PIN, dhtType);
+    dht = *dht_replace;
+    dht.begin();
+  }
   if (displayUsed) drawProgressBar(30);  
 
   //Info memory
@@ -108,13 +120,13 @@ void setup() {
 
   //Timer
   t.every(interval * 1000, takeReading, 0);
-  t.every(       1 * 1000, updateExecutionTime, 0);
-  //t.every(  0.01 * 1000, handleServer, 0);
-
-  //Setup done
+  //t.every(  0.01 * 1000, handleClient, 0);
+  if (displayUsed) t.every(1 * 1000, updateExecutionTime, 0);
   if (displayUsed) drawProgressBar(100);
-  float t_dal, h_dal, t_dht, h_dht;
-  readSensors(t_dal, h_dal, t_dht, h_dht);
+
+  //Show data on display
+  float t1, t2, t3, t, h;
+  readSensors(t1, t2, t3, t, h);
   lastExecutionTime = millis();
 }
 
@@ -124,7 +136,7 @@ void loop()
   httpServer.handleClient();
 }
 
-void handleServer(void* context)
+void handleClient(void* context)
 {
   httpServer.handleClient();
 }
@@ -139,7 +151,7 @@ void infoMemory()
   Serial.print(size);
   Serial.println(" kB");
     
-  //Fre space
+  //Free space
   Serial.print("Free space available ");
   uint32_t space = ESP.getFreeSketchSpace();
   space = space / 1024;
@@ -153,18 +165,36 @@ void readMemory()
 {
   struct config
   {
-    char sensor[20];
-    char key[20];           
-    char login[20];
-    char passwd[20];
+    char  sensor[20];
+    char  key[20];           
+    char  adminLogin[20];
+    char  adminPasswd[20];
+    char  wifiLogin[20];
+    char  wifiPasswd[20];
+    char  serialUsed;
+    char  displayUsed;
+    char  dallasUsed;
+    char  dhtUsed;
+    char  dhtType;
   } memory; 
   
   EEPROM.begin(512);
   EEPROM_readAnything(offset, memory);
   if (sensor          == "<from-eeprom>") sensor          = memory.sensor;
   if (key             == "<from-eeprom>") key             = memory.key;
-  if (update_username == "<from-eeprom>") update_username = memory.login;
-  if (update_password == "<from-eeprom>") update_password = memory.passwd;
+  if (update_username == "<from-eeprom>") update_username = memory.adminLogin;
+  if (update_password == "<from-eeprom>") update_password = memory.adminPasswd;
+  if (serialUsed      == 255)             serialUsed      = bool(memory.serialUsed);
+  if (displayUsed     == 255)             displayUsed     = bool(memory.displayUsed);
+  if (dallasUsed      == 255)             dallasUsed      = bool(memory.dallasUsed);
+  if (dhtUsed         == 255)             dhtUsed         = bool(memory.dhtUsed);
+  if (dhtType         == 255)             dhtType         = int(memory.dhtType);
+
+  if (serialUsed      == 255)             serialUsed      = true;
+  if (displayUsed     == 255)             displayUsed     = true;
+  if (dallasUsed      == 255)             dallasUsed      = true;
+  if (dhtUsed         == 255)             dhtUsed         = true;
+  if (dhtType         == 255)             dhtType         = 11;
 }
 
 void setupWifi()
@@ -187,12 +217,6 @@ void setupWebServer()
   });
   httpServer.begin();
   MDNS.addService("http", "tcp", 80);
-}
-
-void setupDisplay()
-{
-  display.init();
-  display.flipScreenVertically();
 }
 
 void drawProgressBar(int progress) {
@@ -251,20 +275,22 @@ void drawComputer() {
   display.display();
 }
 
-float readSensors(float &t_dal, float &h_dal, float &t_dht, float &h_dht)
+float readSensors(float &t1, float &t2, float &t3, float &t, float &h)
 {
-  drawComputer();
-  float t = NAN;
+  if (displayUsed) drawComputer();
+  float tDisp = NAN;
   
   //Get data
-  readSensorDallas (t_dal, h_dal);
-  readSensorDHT (t_dht, h_dht);
-  if (!isnan(t_dht)) t = t_dht;
-  if (!isnan(t_dal)) t = t_dal;
-
-  //Show on display
-  drawValues(t, h_dht);
-  return t;
+  readSensorDallas (t1, t2, t3);
+  readSensorDHT (t, h);
+  
+  //Show one value on display
+  if (!isnan(t))  tDisp = t;
+  if (!isnan(t3)) tDisp = t3;
+  if (!isnan(t2)) tDisp = t2;
+  if (!isnan(t1)) tDisp = t1;
+  if (displayUsed) drawValues(tDisp, h);
+  return tDisp;
 }
 
 void updateExecutionTime(void* context)
@@ -279,12 +305,8 @@ void takeReading(void* context)
   lastExecutionTime = millis();
   
   Serial.println();
-  float t_dal, h_dal, t_dht, h_dht;
-  readSensors(t_dal, h_dal, t_dht, h_dht);
-  if (isnan(t_dal)) {
-    t_dal = t_dht;
-    t_dht = NAN;
-  }
+  float t1, t2, t3, t, h;
+  readSensors(t1, t2, t3, t, h);
 
   //Push data to server
   Serial.println("Connecting to server " + String(server) + "...");
@@ -296,16 +318,11 @@ void takeReading(void* context)
     String params;
     params += "key=" + key;
     params += "&sensor=" + sensor;
-    if (!isnan(t_dal)) params += "&value1=" + String(t_dal); //Dallas
-    if (!isnan(h_dht)) params += "&value2=" + String(h_dht); //DHT
-    if (!isnan(t_dht)) params += "&value3=" + String(t_dht); //DHT
-
-    //GET request
-    /*client.println("GET /add.php?" + params + " HTTP/1.1");
-      client.println("Host: " + String(server));
-      client.println("User-Agent: ArduinoWiFi/1.1");
-      client.println("Connection: close");
-      client.println();*/
+    if (!isnan(t1)) params += "&value1=" + String(roundTenth(t1)); //Dallas 1
+    if (!isnan(t2)) params += "&value2=" + String(roundTenth(t2)); //Dallas 2
+    if (!isnan(t3)) params += "&value3=" + String(roundTenth(t3)); //Dallas 3
+    if (!isnan(t))  params += "&value4=" + String(t);  //DHT
+    if (!isnan(h))  params += "&value5=" + String(h);  //DHT
 
     //POST request
     String request;
@@ -320,21 +337,10 @@ void takeReading(void* context)
     request += params;
     request += "\r\n\r\n";
     client.println(request);
-
-    //See response
-    /*delay(100);
-      while(client.available())
-      {
-      String line = client.readStringUntil('\r');
-      Serial.print(line);
-      }*/
-
     Serial.println("Data sent");
   }
   client.stop();
-
   Serial.println("Waiting for " + String(interval) + " seconds...");
-  //delay(interval*1000);
 }
 
 String deviceStatus() {
@@ -371,12 +377,10 @@ String deviceStatus() {
   info += (" dBm");
   info += ("<br />");
 
-  float t1, h1, t2, h2;
-  readSensors(t2, h2, t1, h1);
-  info += ("<b>DS18B20 Readings:</b> " + String(t2) + "&#8451; ");
-  info += ("<br />");
-  info += ("<b>DHT11 Readings:</b> " + String(t1) + "&#8451; " + String(h1) + "%");
-  info += ("<br />");
+  float t1, t2, t3, t, h;
+  readSensors(t1, t2, t3, t, h);
+  if (dallasUsed) info += ("<b>DS18B20 Readings:</b> " + String(t1) + "&#8451; " + String(t2) + "&#8451; " + String(t3) + "&#8451;<br />");
+  if (dhtUsed)    info += ("<b>DHT" + String(dhtType) + " Readings:</b> " + String(t) + "&#8451; " + String(h) + "%<br />");
 
   info += ("<b>Firmware:</b> ");
   info += (firmware);
@@ -389,13 +393,17 @@ String deviceStatus() {
   info += ("<br />");
 
   info += ("<b>Schema</b><ul style='padding-top: 0; margin-top: 0;'>");
-  info += ("<li><b>GPIO0:</b> Dallas DS18B20 data &amp; pull-up resistor 4K7&#8486;</li>");
-  info += ("<li><b>GPIO1:</b> SSD1306 display SDA (I2C serial data)</li>");
-  info += ("<li><b>GPIO2:</b> DHT11 data &amp; pull-up resistor 10K&#8486;</li>");
-  info += ("<li><b>GPIO3:</b> SSD1306 display SCL (I2C serial clock)</li>");
+  info += ("<li><b>GPIO" + String(DALLAS_PIN) + ":</b> Dallas DS18B20 data &amp; pull-up resistor 4K7&#8486;</li>");
+  info += ("<li><b>GPIO" + String(DISPLAY_SDA) + ":</b> SSD1306 display SDA (I2C serial data)</li>");
+  info += ("<li><b>GPIO" + String(DHT_PIN) + ":</b> DHT" + String(dhtType) + " data &amp; pull-up resistor 10K&#8486;</li>");
+  info += ("<li><b>GPIO" + String(DISPLAY_SCL) + ":</b> SSD1306 display SCL (I2C serial clock)</li>");
   info += ("</ul>");
 
   info += ("<img alt='Schema' src='//arduino.vitadostal.cz/img/ESP01.png' />");
+  info += ("<br />");
+  info += ("<img alt='Schema' src='//arduino.vitadostal.cz/img/ESP12E.png' />");
+  info += ("<br />");
+  info += ("<img alt='Schema' src='//arduino.vitadostal.cz/img/ESP12Eboard.png' />");
   info += ("</body></html>");
 
   return info;
@@ -403,11 +411,12 @@ String deviceStatus() {
 
 void readSensorDHT(float &t, float &h)
 {
-  int i = 1;
-
+  if (!dhtUsed) {t = h = NAN; return;}
+  
   h = dht.readHumidity();
   t = dht.readTemperature();
 
+  int i = 1;
   while (isnan(h) || isnan(t))
   {
     Serial.println("Failed to read from DHT sensor!");
@@ -423,25 +432,33 @@ void readSensorDHT(float &t, float &h)
   Serial.println("DHT | Measured data: " + String(t) + "°C " + String(h) + "%");
 }
 
-void readSensorDallas(float &t, float &h)
+void readSensorDallas(float &t1, float &t2, float &t3)
 {
-  int i;
-
+  if (!dallasUsed) {t1 = t2 = t3 = NAN; return;}
+  
   dallas.requestTemperatures();
-  t = dallas.getTempCByIndex(0);
-  i = round (t * 10);
-  t = i / 10.0;
+  t1 = dallas.getTempCByIndex(0);
+  t2 = dallas.getTempCByIndex(1);
+  t3 = dallas.getTempCByIndex(2);
 
-  if (t == -127)
+  if (t1 == -127) t1 = NAN;
+  if (t2 == -127) t2 = NAN;
+  if (t3 == -127) t3 = NAN;
+
+  if (t1 == NAN)
   {
-    t = NAN;
     Serial.println("Failed to read from Dallas sensor!");
     return;
-  }
+  }  
 
-  h = 0;
+  Serial.println("Dallas | Measured data: " + String(t1) + "°C " + String(t2) + "°C " + String(t3) + "°C");
+}
 
-  Serial.println("Dallas | Measured data: " + String(t) + "°C ");
+float roundTenth(float t)
+{  
+  int i = round (t * 10);
+  t = i / 10.0;
+  return t;
 }
 
 String mac2String(byte ar[]) {
