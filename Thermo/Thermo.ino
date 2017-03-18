@@ -19,7 +19,7 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.08 / 18 Mar 2017" ;    //Firmware version
+const String firmware        = "v1.09 / 18 Mar 2017" ;    //Firmware version
 const int    offset          = 360;                       //EEPROM memory offset
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
@@ -30,11 +30,11 @@ const char*  update_path     = "/firmware";               //Firmware update path
       String update_username = "<from-eeprom>";           //Firmware update login
       String update_password = "<from-eeprom>";           //Firmware update password
 
-      byte   serialUsed      = 255;                       //Console connected (255 = from EEPROM)
+      byte   serialUsed      = 255;                       //Console connected (255 means <from EEPROM>)
       byte   displayUsed     = 255;                       //Display connected
       byte   dallasUsed      = 255;                       //Dallas sensor connected
       byte   dhtUsed         = 255;                       //DHT sensor connected
-      int    dhtType         = 255;                       //DHT sensor used
+      byte   dhtType         = 255;                       //DHT sensor used
 
 #define DALLAS_PIN           0                            //Dallas DS18B20 DATA
 #define DISPLAY_SDA          1                            //SSD1306 sDATA
@@ -188,8 +188,9 @@ void readMemory()
   if (displayUsed     == 255)             displayUsed     = bool(memory.displayUsed);
   if (dallasUsed      == 255)             dallasUsed      = bool(memory.dallasUsed);
   if (dhtUsed         == 255)             dhtUsed         = bool(memory.dhtUsed);
-  if (dhtType         == 255)             dhtType         = int(memory.dhtType);
+  if (dhtType         == 255)             dhtType         = byte(memory.dhtType);  
 
+  //Defaults
   if (serialUsed      == 255)             serialUsed      = true;
   if (displayUsed     == 255)             displayUsed     = true;
   if (dallasUsed      == 255)             dallasUsed      = true;
@@ -242,7 +243,7 @@ void drawValues(float t_dal, float h_dht)
   if (!isnan(t_dal))
     out = String(show) + " °C";
   else
-    out = "< ERROR >";
+    out = "{ error }";
 
   /*if (!isnan(h_dht))
   {
