@@ -19,12 +19,12 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.09 / 18 Mar 2017" ;    //Firmware version
+const String firmware        = "v1.10 / 19 Mar 2017" ;    //Firmware version
 const int    offset          = 360;                       //EEPROM memory offset
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
-const int    pause           = 0.1;                       //Next measure on error (in seconds)
-const int    attempts        = 5;                         //Number of tries
+const int    pause           = 250;                       //Next measure on error (in milliseconds)
+const int    attempts        = 12;                        //Number of tries
 
 const char*  update_path     = "/firmware";               //Firmware update path
       String update_username = "<from-eeprom>";           //Firmware update login
@@ -42,6 +42,7 @@ const char*  update_path     = "/firmware";               //Firmware update path
 #define DISPLAY_SCL          3                            //SSD1306 sCLOCK
 #define DISPLAY_ADDRESS      0x3c                         //SSD1306 128x64 display support only
 
+#define SENSORS              6
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
 DHT dht(0, 0);
@@ -50,6 +51,10 @@ OneWire oneWire(DALLAS_PIN);
 DallasTemperature dallas(&oneWire);
 Timer t;
 unsigned long lastExecutionTime;
+short mem = 1;
+float mem_val[SENSORS];
+String mem_desc[SENSORS] = {"", "DALLAS 1", "DALLAS 2", "DALLAS 3", "DHT", "DHT"};
+String mem_unit[SENSORS] = {"", "°C", "°C", "°C", "°C", "%"};
 String host;
 
 template <class T> int EEPROM_readAnything(int ee, T& value)
@@ -91,11 +96,13 @@ void setup() {
   //Init DHT
   if (dhtUsed)
   {
-    DHT* dht_replace = new DHT(DHT_PIN, dhtType);
-    dht = *dht_replace;
-    dht.begin();
+    mem_desc[SENSORS-2] += String(dhtType);
+    mem_desc[SENSORS-1] += String(dhtType);
+    if (dhtType == 11) {DHT* dht_replace = new DHT(DHT_PIN, DHT11); dht = *dht_replace; dht.begin();}
+    if (dhtType == 21) {DHT* dht_replace = new DHT(DHT_PIN, DHT21); dht = *dht_replace; dht.begin();}
+    if (dhtType == 22) {DHT* dht_replace = new DHT(DHT_PIN, DHT22); dht = *dht_replace; dht.begin();}
   }
-  if (displayUsed) drawProgressBar(30);  
+  if (displayUsed) drawProgressBar(30);
 
   //Info memory
   infoMemory();
@@ -120,20 +127,21 @@ void setup() {
 
   //Timer
   t.every(interval * 1000, takeReading, 0);
-  //t.every(  0.01 * 1000, handleClient, 0);
+  t.every(     0.1 * 1000, handleClient, 0);
   if (displayUsed) t.every(1 * 1000, updateExecutionTime, 0);
+  if (displayUsed) t.every(3 * 1000, updatePageDisplayed, 0);
   if (displayUsed) drawProgressBar(100);
 
   //Show data on display
   float t1, t2, t3, t, h;
-  readSensors(t1, t2, t3, t, h);
   lastExecutionTime = millis();
+  readSensors(t1, t2, t3, t, h);
 }
 
 void loop()
 {
   t.update();
-  httpServer.handleClient();
+  //httpServer.handleClient();
 }
 
 void handleClient(void* context)
@@ -231,32 +239,46 @@ void drawProgressBar(int progress) {
 }
 
 void drawBottomProgressBar(int progress) {
-  display.drawProgressBar(0, 40, 127, 10, progress);
+  display.drawProgressBar(0, 46, 127, 10, progress);
   display.display();
 }
 
-void drawValues(float t_dal, float h_dht)
-{
-  char show[10];
-  String out;
-  dtostrf(t_dal, 0, 1, show);
-  if (!isnan(t_dal))
-    out = String(show) + " °C";
-  else
-    out = "{ error }";
-
-  /*if (!isnan(h_dht))
+void drawValues()
+{ 
+  String out, out_top;
+  
+  int i = 1;  
+  while (isnan(mem_val[mem]))
   {
-    dtostrf(h_dht, 0, 0, show);
-    out += " " + String(show);
-    out += " %";
-  }*/
+    mem++;
+    if (mem == SENSORS) mem = 1;
+    i++;
+    if (i > SENSORS) {mem = 1; break;}
+  }
+
+  if (isnan(mem_val[mem]))
+  {
+    out_top = "NO SENSOR FOUND";
+    out = "error";
+  }
+  else
+  {
+    char out_char[10];
+    dtostrf(mem_val[mem], 0, 1, out_char);
+    out_top = mem_desc[mem];
+    out = String(out_char);
+    if (mem == 4 || mem == 5) out.remove(out.length()-2, 2);
+    out += " " + mem_unit[mem];    
+  }
   
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_10);  
+  display.drawString(64, 2, out_top);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_24);
-  display.drawString(64, 10, out);
-  display.display();
+  display.drawString(64, 17, out);
+  updateExecutionTime(0);
 }
 
 void drawWiFi() {
@@ -286,11 +308,12 @@ float readSensors(float &t1, float &t2, float &t3, float &t, float &h)
   readSensorDHT (t, h);
   
   //Show one value on display
-  if (!isnan(t))  tDisp = t;
-  if (!isnan(t3)) tDisp = t3;
-  if (!isnan(t2)) tDisp = t2;
-  if (!isnan(t1)) tDisp = t1;
-  if (displayUsed) drawValues(tDisp, h);
+  mem_val[1] = t1;
+  mem_val[2] = t2;
+  mem_val[3] = t3;
+  mem_val[4] = t;
+  mem_val[5] = h;
+  if (displayUsed) drawValues();
   return tDisp;
 }
 
@@ -299,6 +322,13 @@ void updateExecutionTime(void* context)
   int progress = round((float(millis() - lastExecutionTime) / ((float)interval * 10)) * 1.03);
   if (progress > 100) progress = 100;
   drawBottomProgressBar(progress);
+}
+
+void updatePageDisplayed(void* context)
+{
+  mem++;
+  if (mem > 5) mem = 1;
+  drawValues();
 }
 
 void takeReading(void* context)
@@ -327,7 +357,7 @@ void takeReading(void* context)
 
     //POST request
     String request;
-    request += "POST /add.php HTTP/1.1\n";
+    request += "POST /script/measure_add.php HTTP/1.1\n";
     request += "Host: " + String(server) + "\n";
     request += "User-Agent: ArduinoWiFi/1.1\n";
     request += "Connection: close\n";
@@ -378,6 +408,7 @@ String deviceStatus() {
   info += (" dBm");
   info += ("<br />");
 
+  Serial.println();
   float t1, t2, t3, t, h;
   readSensors(t1, t2, t3, t, h);
   if (dallasUsed) info += ("<b>DS18B20 Readings:</b> " + String(t1) + "&#8451; " + String(t2) + "&#8451; " + String(t3) + "&#8451;<br />");
@@ -424,7 +455,7 @@ void readSensorDHT(float &t, float &h)
 
     if (i == attempts) return;
 
-    delay(pause * 1000);
+    delay(pause);
     h = dht.readHumidity();
     t = dht.readTemperature();
     i++;
