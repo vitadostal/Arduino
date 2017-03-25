@@ -19,12 +19,13 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.10 / 19 Mar 2017" ;    //Firmware version
+const String firmware        = "v1.11 / 25 Mar 2017" ;    //Firmware version
 const int    offset          = 360;                       //EEPROM memory offset
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
 const int    pause           = 250;                       //Next measure on error (in milliseconds)
 const int    attempts        = 12;                        //Number of tries
+const int    screen_cycle    = 3;                         //Switching sensors on display screen (in seconds)
 
 const char*  update_path     = "/firmware";               //Firmware update path
       String update_username = "<from-eeprom>";           //Firmware update login
@@ -127,9 +128,9 @@ void setup() {
 
   //Timer
   t.every(interval * 1000, takeReading, 0);
-  t.every(     0.1 * 1000, handleClient, 0);
-  if (displayUsed) t.every(1 * 1000, updateExecutionTime, 0);
-  if (displayUsed) t.every(3 * 1000, updatePageDisplayed, 0);
+  t.every(100, handleClient, 0);
+  if (displayUsed) t.every(1000, updateExecutionTime, 0);
+  if (displayUsed) t.every(screen_cycle * 1000, updatePageDisplayed, 0);
   if (displayUsed) drawProgressBar(100);
 
   //Show data on display
@@ -294,7 +295,7 @@ void drawVD() {
 
 void drawComputer() {
   display.clear();
-  display.drawXbm(48, 16, computerWidth, computerHeight, computerBits);
+  display.drawXbm(32, 0, computerWidth, computerHeight, computerBits);
   display.display();
 }
 
@@ -349,11 +350,11 @@ void takeReading(void* context)
     String params;
     params += "key=" + key;
     params += "&sensor=" + sensor;
-    if (!isnan(t1)) params += "&value1=" + String(roundTenth(t1)); //Dallas 1
-    if (!isnan(t2)) params += "&value2=" + String(roundTenth(t2)); //Dallas 2
-    if (!isnan(t3)) params += "&value3=" + String(roundTenth(t3)); //Dallas 3
-    if (!isnan(t))  params += "&value4=" + String(t);  //DHT
-    if (!isnan(h))  params += "&value5=" + String(h);  //DHT
+    if (!isnan(t1)) params += "&class1=DALLAS_1&value1=" + String(roundTenth(t1));  //Dallas 1
+    if (!isnan(t2)) params += "&class2=DALLAS_2&value2=" + String(roundTenth(t2));  //Dallas 2
+    if (!isnan(t3)) params += "&class3=DALLAS_3&value3=" + String(roundTenth(t3));  //Dallas 3
+    if (!isnan(t))  params += "&class4=DHT" + String(dhtType) + "_T&value4=" + String(t);  //DHT
+    if (!isnan(h))  params += "&class5=DHT" + String(dhtType) + "_H&value5=" + String(h);  //DHT
 
     //POST request
     String request;
