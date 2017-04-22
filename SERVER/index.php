@@ -1,16 +1,17 @@
-<?php	//if (isset ($_GET['tab']) && is_numeric($_GET['tab'])) $tab = $_GET['tab']; else $tab = 0; ?>
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>ARDUINO | Sensor Reading | Thermostat</title>
+  <title>ARDUINO | Sensor Reading</title>
   
   <link rel="stylesheet" href="/jquery/jquery-ui.css">
-  <link rel="stylesheet" type="text/css" href="arduino.css">  
+  <link rel="stylesheet" type="text/css" href="arduino.css?version=4">
+  <link rel="stylesheet" href="jquery-hex-colorpicker/css/jquery-hex-colorpicker.css" />
 
   <script src="jquery/external/jquery/jquery.js"></script>
-  <script src="jquery/jquery-ui.js"></script> 
+  <script src="jquery/jquery-ui.js"></script>
   <script src="jquery/jquery.cookie.js"></script>
+  <script src="jquery-hex-colorpicker/src/jquery-hex-colorpicker.min.js"></script>
 
   <script>
   $( function() {
@@ -23,9 +24,18 @@
       }
     });
   } );
+  
   $( function() {
-    $( "#subtabs" ).tabs();
+    $( "#graphtabs" ).tabs({
+    active   : $.cookie("activegraphtab"),
+    activate : function( event, ui ){
+        $.cookie( "activegraphtab", ui.newTab.index(),{
+            expires : 10
+        });
+      }
+    });
   } );
+
   $( function() {
     $( "#datepicker" ).datepicker({
       dateFormat: "dd.mm.yy",
@@ -43,87 +53,65 @@
 <body>
 <?php
 
-//<!-- FUNKCE ============================================================== -->
-  function CzechDay($den) {
-      static $nazvy = array('Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota');
-      return $nazvy[$den];
-  }
-  function CzechMonth($mesic) {
-      static $nazvy = array('', 'Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec',
-          'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec');
-      return $nazvy[$mesic];
-  }
-  function SensorQuery($sensors, $delim = false)
-  {
-     $data = '';
-     foreach ($sensors as $sensor)
-     {
-        if ($data != '') if ($delim) $data .= '&amp;'; else $data .= '&';
-        $data .= 'sensor[]='.$sensor;
-     }
-     return $data;
-  }
+  //Include
+  include "class/Config.class.php";
+  include "class/Params.class.php";
+  include "class/Database.class.php";
+  include "class/Utils.class.php";
+  include "class/Sensor.class.php";
+  include "class/Graph.class.php";
+  Params::get();
+  Params::advanced();
 
-//<!-- DB ================================================================== -->
-  include "dbase.php";
+  //Database
+  $database = new Database();
+  $database->connect();
   
-  $titles = array();
-  $implicit = array();
-  $visible = array();
-  $sql = "SELECT * FROM sensor";
-  $result = $conn->query($sql);
-  while($row = $result->fetch_assoc())
-  {
-    $titles[$row['sensor']] = $row['comment'];
-    if ($titles[$row['sensor']] == '') $titles[$row['sensor']] = $row['sensor'];
-    $visible[$row['sensor']] = $row['visible'];
-    if ($row['implicit']) $implicit[] = $row['sensor'];
-  }    
+  //Objects
+  $graphSet = Graph::loadAll($database, true);
+  $sensorSet = Sensor::loadAll($database, true, true);
+  $allSensorArray = Sensor::arrayAll($database);  
+  $visibleSensorArray = Sensor::arrayVisible($database);
+   
+  //Use implicit when no sensor selected
+  if (empty(Params::$sensors) && Params::$implicit) Params::$sensors = Sensor::arrayImplicit($database);    
 
-//<!-- INPUT =============================================================== -->
-	if (isset ($_GET['sensor']))  $sensors = $_GET['sensor']; else $sensors = array();
-	if (isset ($_GET['date']))    $date    = $_GET['date'];   else $date    = date('d.m.Y');
-  if (!isset ($_GET['date']) && count($sensors) == 0) $sensors = $implicit; 
-  if (!is_array($sensors)) {$sensors = array($sensors);}
-  foreach($sensors as $key => $val) {$sensors[$key] = mysqli_real_escape_string($conn, $sensors[$key]);}
-  $date = mysqli_real_escape_string($conn, $date);   
-  foreach($sensors as $key => $sensor) if (!array_key_exists($sensor, $titles)) unset ($sensors[$key]);
-  
-//<!-- FORM ================================================================ -->
+  //Remove not existing sensor references
+  $allSensorArray = Sensor::arrayAll($database);    
+  foreach(Params::$sensors as $key=>$val) if (!in_array($val, $allSensorArray)) unset(Params::$sensors[$key]); 
+
+  //Header form
   print '<form id="form" method="GET" action="/">';
-
-    print '<div style="float: left; margin-right: 20px;">';
+    
+    //Sensors
+    print '<div class="floatleft right20">';
       print '<span class="master">Senzory:</span>';
-      foreach ($titles as $key => $val)
+      foreach ($sensorSet as $sensor)
       {
-        if (!$visible[$key] && !in_array($key, $sensors)) continue;
-        print '<label for="checkbox-'.$key.'">'.$val.'</label>';
-        print '<input type="checkbox" name="sensor[]" id="checkbox-'.$key.'" value="'.$key.'" onchange="$(\'#form\').submit()" ';
-        if (in_array($key, $sensors)) print 'checked="checked" ';
+        if (!in_array($sensor->sensor, Params::$sensors) && !in_array($sensor->sensor, $visibleSensorArray)) continue;
+        print '<label for="checkbox-'. $sensor->sensor. '">'. $sensor->comment. '</label>';
+        print '<input type="checkbox" name="sensor[]" id="checkbox-'. $sensor->sensor. '" value="'. $sensor->sensor. '" onchange="$(\'#form\').submit()" ';
+          if (in_array($sensor->sensor, Params::$sensors)) print 'checked="checked" ';
         print '/>&nbsp;';
       }
     print '</div>';
    
-    print '<div style="float: left;">';
+    //Calendar
+    print '<div class="floatleft">';
       print '<span class="master">Datum:</span>'; 
-      $date2 = new DateTime($date);
-      $date2->modify('-1 day');   
-      print '<button onclick="$(\'#datepicker\').val(\''.$date2->format("d.m.Y").'\')"  
+      print '<button onclick="$(\'#datepicker\').val(\''. Params::$date_czech_prev. '\')"  
               class="ui-button ui-widget ui-corner-all">❰❰ Předchozí den</button>&nbsp;';
-      $date2->modify('+1 day');   
-      print '<input style="background-color:white;"  type="text" name="date" id="datepicker" value="'.$date2->format("d.m.Y").'" 
-              class="ui-button ui-widget ui-corner-all" onchange="$(\'#form\').submit()" />&nbsp;';
-      $date2->modify('+1 day');   
-      print '<button onclick="$(\'#datepicker\').val(\''.$date2->format("d.m.Y").'\')"
+      print '<input type="text" name="date" id="datepicker" value="'. Params::$date_czech. '" 
+              class="ui-button ui-widget ui-corner-all white" onchange="$(\'#form\').submit()" />&nbsp;';
+      print '<button onclick="$(\'#datepicker\').val(\''. Params::$date_czech_next. '\')"
               class="ui-button ui-widget ui-corner-all">Následující den ❱❱</button>';                                          
     print '</div>';
     
-    print '<div style="clear:both"></div>';
-  
+    print '<div class="clear"></div>';  
   print '</form>';
-  $date2->modify('-1 day'); 
-  print '<h1>'.CzechDay($date2->format('w')).' '.$date2->format("j. ").' '.CzechMonth($date2->format("n")).'</h1>';
-  $date = $date2->format("Y-m-d");
+
+  //Title
+  print '<h1>'. Params::$title. '</h1>';
 ?>
 
 <div id="tabs">
@@ -138,104 +126,73 @@
   
   <!-- GRAFY =============================================================== -->
   <div id="tabs-1">
-    <?php 
-      if (count($sensors) > 0)
-      {
-        print "<p><img id='chartA' src='chart.php?".SensorQuery($sensors, true)."&amp;date=$date&amp;graph=T' alt='Graph'/></p>";
-        print "<p><img id='chartV' src='chart.php?".SensorQuery($sensors, true)."&amp;date=$date&amp;graph=H' alt='Graph'/></p>";
+    <?php
+      print '<div id="graphtabs">';
+        print '<ul>';
+          foreach ($graphSet as $graph)
+          {             
+            $chart = 'chart.php?'. Utils::sensorQuery(Params::$sensors). '&graph='. $graph->graph. '&date='. Params::$date_czech; 
+             
+            print '<li><a href="#'. $graph->graph. '"
+              onclick=\'$("div#svg-'. $graph->graph. '").load("'. $chart. '")\'
+              >';
+              print $graph->description;
+            print '</a></li>';
+          }
+        print '</ul>';
+      
+        $i = 0;
+        foreach ($graphSet as $graph)
+        {
+          $chart = 'chart.php?'. Utils::sensorQuery(Params::$sensors). '&graph='. $graph->graph. '&date='. Params::$date_czech; 
+
+          //Prepare area for the graph
+          print '<div class="graph" id="'. $graph->graph. '">';
+            print '<div id="svg-'. $graph->graph. '">';
+            print '</div>';
+            print '<button onclick=\'window.open("'. $chart. '&new=1")\' class="ui-button ui-widget ui-corner-all">Zobrazit graf v novém okně</button>';
+            print '<p>Grafy se automaticky obnovují každých 60 sekund</p>';      
+          print '</div>';
+
+          //Load graph for the currently opened tab
+          if (!isset($_COOKIE['activegraphtab']) || $i == $_COOKIE['activegraphtab'])
+          {
+            print '<script>';
+              print '$("div#svg-'. $graph->graph. '").load("'.$chart. '")';          
+            print '</script>';
+          }
+          $i++;
+        }
+      print '</div>';
     ?>
-        <script>
-          var sensor = '<?php print SensorQuery($sensors) ?>';
-          var date = '<?php print $date ?>';
-          
-          setInterval(function() {
-            var chart1 = document.getElementById('chart1');
-            chart1.src = 'chart.php?'+sensor+'&date='+date+'&value=1&rand=' + Math.random();
-            var chart2 = document.getElementById('chart2');
-            chart2.src = 'chart.php?'+sensor+'&date='+date+'&value=2&rand=' + Math.random();
-          }, 60000);  
-        </script>
-        
-        Grafy se automaticky obnovují každých 60 sekund.     
-    <?php    
-      }
-      else print 'Není vybrán žádný senzor!';
-    ?>  
   </div>
 
   <!-- MERENI ============================================================== -->
   <div id="tabs-2">
-    <?php   
-    
-      if (count($sensors) == 0) print 'Není vybrán žádný senzor!';      
-	    
-      if (count($sensors) > 1)
-      { 
-        print '<div id="subtabs"><ul>';
-        foreach ($sensors as $sensor) print "<li><a href='#subtabs-$sensor'>$titles[$sensor]</a></li>";
-        print '</ul>';
-      }       
-      
-	    foreach ($sensors as $sensor)
-      {                  
-        print "<div id='subtabs-$sensor'>";
-      
-        $sql = "SELECT HOUR(timestamp) as hour, MINUTE(timestamp) as minute, DATE(timestamp) AS date, TIME(timestamp) AS time,
-                value1, value2, value3, value4, value5, text1, text2 FROM measure WHERE (value1 IS NOT NULL OR text1 IS NOT NULL) AND sensor = '$sensor' AND DATE(timestamp) = '$date'";
-        $result = $conn->query($sql);
-        $result = $conn->query($sql);
-        
-        if ($result->num_rows > 0)
+    <div id="target-history">Data budou načtena za necelých 5 sekund...<br />Toto zpoždění je záměrné kvůli rychlejšímu vykreslování webu na pomalejších sítích.  
+      <script>
+        var measureLoaded = false;
+        function measureLoad()
         {
-          $export = '';
-          $tabs = '';
-          $h = -1;
-          while($row = $result->fetch_assoc())
+          if (!measureLoaded)
           {
-            if ($h != $row['hour'])
-            {
-              if ($h != -1) $export .= "\n</table></div>\n";
-              $h = $row['hour'];
-              $tabs .=  "<li><a href='#subsubtabs-$sensor-$h'>$h</a></li>";
-              $export .= "<div id='subsubtabs-$sensor-$h'><table>\n";
-              $export .= '<tr class="darker"><td colspan="1" style="border:none"></td><td colspan="3">DALLAS</td><td colspan="2">DHT</td><td colspan="2">GPS</td></tr>';
-            }
-            $export .= '<tr>'; $hour = $row['hour'];        
-              $export .= '<td>'.$row['time'].'</td>';
-              $export .= '<td class="right">'.$row['value1'].' <span class="unit">&#x2103;</span></td>';
-              $export .= '<td class="right">'.$row['value2'].' <span class="unit">&#x2103;</span></td>';
-              $export .= '<td class="right">'.$row['value3'].' <span class="unit">&#x2103;</span></td>';
-              $export .= '<td class="right">'.$row['value4'].' <span class="unit">&#x2103;</span></td>';
-              $export .= '<td class="right">'.$row['value5'].' <span class="unit">%</span></td>';
-              $export .= '<td class="right">'.$row['text1'].' <span class="unit">N</span></td>';
-              $export .= '<td class="right">'.$row['text2'].' <span class="unit">E</span></td>';
-            $export .= '</tr>';      
+            $('div#target-history').load('tab1_history.php?<?php print Utils::sensorQuery(Params::$sensors) ?>&date=<?php print Params::$date_czech ?>');
+            measureLoaded = true;
           }
-          $export .= '</table></div>';
-  
-          print '<script> $( function() { $( "#subsubtabs-'.$sensor.'" ).tabs(); } ); </script>';
-          print '<div id="subsubtabs-'.$sensor.'"><ul>';
-          print $tabs;
-          print '</ul>';
-          print $export;
-          print '</div>';
         }
-        else print 'Nenalezen žádný záznam!';
-        
-        print '</div>';      
-      }
-      if (count($sensors) > 1) print '</div>';
-    ?>    
-  </div>
+        setInterval(measureLoad, 5000);
+      </script>
+    </div>    
+  </div>  
 
   <!-- AKTUÁLNĚ ============================================================ -->
   <div id="tabs-3">
-    <div id="target-now">Data se načítají...   
+    <div id="target-current">Data se načítají...   
       <script>
         setInterval( function() {
-          $('div#target-now').load('news.php?<?php print SensorQuery($sensors) ?>&date=<?php print($date2->format("d.m.Y")) ?>');
+          $('div#target-current').load('tab2_current.php?<?php print Utils::sensorQuery(Params::$sensors) ?>&date=<?php print Params::$date_czech ?>');
         }, 5000);
-      $('div#target-now').load('news.php?<?php print SensorQuery($sensors) ?>');
+      $('div#target-current').load('tab2_current.php?<?php print Utils::sensorQuery(Params::$sensors) ?>&date=<?php print Params::$date_czech ?>');
       </script>
     </div>    
   </div>
@@ -244,7 +201,7 @@
   <div id="tabs-4">
     <div id="target-sensor">Data se načítají...   
       <script>
-         $('div#target-sensor').load('sensor.php?date=<?php print($date2->format("d.m.Y")) ?>');
+         $('div#target-sensor').load('tab3_sensor.php?date=<?php print Params::$date_czech ?>');
       </script>
     </div>  
   </div>
@@ -253,16 +210,16 @@
   <div id="tabs-5">
     <div id="target-program">Data se načítají...   
       <script>
-         $('div#target-program').load('program.php?date=<?php print($date2->format("d.m.Y")) ?>');
+         $('div#target-program').load('tab4_program.php?date=<?php print Params::$date_czech ?>');
       </script>
     </div>  
   </div>
   
   <!-- TERMOSTAT =========================================================== -->
   <div id="tabs-6">
-    <div id="target-termostat">Data se načítají...   
+    <div id="target-thermostat">Data se načítají...   
       <script>
-         $('div#target-termostat').load('termostat.php?date=<?php print($date2->format("d.m.Y")) ?>');
+         $('div#target-thermostat').load('tab5_thermostat.php?date=<?php print Params::$date_czech ?>');
       </script>
     </div>
   </div>    
