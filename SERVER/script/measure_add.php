@@ -6,7 +6,7 @@
   $database = new Database();
   $database->connect();
   
-  if (isset ($_POST['key']) != Config::$key) exit();
+  if (!isset ($_POST['key']) || $_POST['key'] != Config::$key) exit();
   if (isset ($_POST['sensor'])) $sensor = '"'.mysqli_real_escape_string($database->conn, $_POST['sensor']).'"'; else exit();
 
   for ($field = 1; $field <= 10; $field++)

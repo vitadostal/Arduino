@@ -28,6 +28,14 @@ class Sensor
     return $dataRow;
 	}
   
+  public static function createSensor($name)
+  {
+    $sensor = new Sensor();
+    $sensor->sensor = $name;   
+    $sensor->comment = '<i>nepojmenovaný</i>';   
+    return $sensor; 
+  }
+  
 	public static function loadAll($db, $unnamed = false, $autocomment = false)
 	{	
 		if ($unnamed)

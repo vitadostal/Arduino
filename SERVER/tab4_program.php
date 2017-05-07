@@ -248,129 +248,129 @@
 
 </script>
 <?php
+
+  //Include
   include "class/Config.class.php";
   include "class/Database.class.php";
+  include "class/Program.class.php";
+  include "class/Params.class.php";
+  Params::get();
+
+  //Database
   $database = new Database();
   $database->connect();
-  $conn = $database->conn;
 
-  $sql = "SELECT * FROM program WHERE production=0 ORDER BY priority DESC, from_date, to_date, mon DESC, tue DESC, wed DESC, thu DESC, fri DESC, sat DESC, sun DESC, from_time, to_time";
-  $result = $conn->query($sql);
+  //Objects
+  $programSet = Program::loadAllEditable($database);  
+    
+  //Display
+  print '<p>Veškeré změny v programech se projeví až po jejich odeslání do termostatu. Nižší číslo priority má přednost.</p>';
+  print '<table id="program" class="default">';
+  print '<tr>';
+    print '<th>Program & priorita</th>';
+    print '<th class="period">Období</th>';
+    print '<th class="time">Čas</th>';
+    print '<th class="small">Po</th>';
+    print '<th class="small">Út</th>';
+    print '<th class="small">St</th>';
+    print '<th class="small">Čt</th>';
+    print '<th class="small">Pá</th>';
+    print '<th class="small">So</th>';
+    print '<th class="small">Ne</th>';
+    print '<th class="temp">Teplota</th>';
+    print '<th class="hyst">Hystereze</th>';
+    print '<th class="but">Upravit & odebrat</th>';
+  print '</tr>';
   
-  if (!isset($_GET['date'])) exit;
-  $date = mysqli_real_escape_string($conn, $_GET['date']);
-  $date = new DateTime($date);    
-    
-  if ($result->num_rows > 0)
+  foreach($programSet as $program)
   {
-    print '<p>Veškeré změny v programech se projeví až po jejich odeslání do termostatu. Nižší číslo priority má přednost.</p>';
-    print '<table id="program" class="default">';
-    print '<tr>';
-      print '<th>Program & priorita</th>';
-      print '<th class="period">Období</th>';
-      print '<th class="time">Čas</th>';
-      print '<th class="small">Po</th>';
-      print '<th class="small">Út</th>';
-      print '<th class="small">St</th>';
-      print '<th class="small">Čt</th>';
-      print '<th class="small">Pá</th>';
-      print '<th class="small">So</th>';
-      print '<th class="small">Ne</th>';
-      print '<th class="temp">Teplota</th>';
-      print '<th class="hyst">Hystereze</th>';
-      print '<th class="but">Upravit & odebrat</th>';
+    if ($program->priority != 0 && $program->priority != 6 && $program->priority != 7)
+      print '<tr>';
+    else
+      print '<tr class="manual">';
+      
+      print '<td>';
+        $color = '#999';
+        switch ($program->color)
+        {
+          case "BLUE":   $color = '#599ad3'; break;
+          case "RED":    $color = '#f1595f'; break;
+          case "GREEN":  $color = '#79c36a'; break;
+          case "YELLOW": $color = '#d0c721'; break;
+        }        
+        print '<div style="float: left; vertical-align: -2px; margin-right: 10px; width: 20px; height: 20px; color: white; text-align: center; background-color: '.$color.'">'.$program->priority.'</div>';        
+        print $program->title;
+      print '</td>';
+      print '<td class="period">';
+        if ($program->from_date != '' && $program->to_date != '')
+        {
+           $date_from = new DateTime($program->from_date);          
+           $date_to   = new DateTime($program->to_date);
+           print '<b>'.$date_from->format('d.m.Y').'</b> '.$date_to->format('d.m.Y');              
+        }
+        else print '✖';
+      print '</td>';         
+      print '<td class="time">';
+        print '<b>'.substr($program->from_time,0,5).'</b>';
+        print '<br />';
+        print substr($program->to_time,0,5);
+      print '</td>';
+      if (Params::$date->format("w") == 1) $color2 = '#f9a65a'; else $color2 = 'black';
+      print '<td class="small">'; if ($program->mon) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
+      if (Params::$date->format("w") == 2) $color2 = '#f9a65a'; else $color2 = 'black';
+      print '<td class="small">'; if ($program->tue) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
+      if (Params::$date->format("w") == 3) $color2 = '#f9a65a'; else $color2 = 'black';
+      print '<td class="small">'; if ($program->wed) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
+      if (Params::$date->format("w") == 4) $color2 = '#f9a65a'; else $color2 = 'black';
+      print '<td class="small">'; if ($program->thu) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
+      if (Params::$date->format("w") == 5) $color2 = '#f9a65a'; else $color2 = 'black';
+      print '<td class="small">'; if ($program->fri) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
+      if (Params::$date->format("w") == 6) $color2 = '#f9a65a'; else $color2 = 'black';
+      print '<td class="small">'; if ($program->sat) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
+      if (Params::$date->format("w") == 0) $color2 = '#f9a65a'; else $color2 = 'black';
+      print '<td class="small">'; if ($program->sun) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
+      if ($program->min != '' && $program->max != '')
+      {
+        print '<td class="temp" style="color:'.$color.'"><b>'.$program->max.'</b> °C</td>';
+        print '<td class="hyst">'.$program->min.' °C</td>';
+      }
+      else print '<td colspan="2" style="border-right: 2px solid #ddd;"><i>vytápění vypnuto<i></td>';
+      if ($program->priority != 0 && $program->priority != 6 && $program->priority != 7)
+      {
+        print '<td class="but"  style="border-right: none;">';
+          print '<button onclick="';
+            print '$(\'#edit_id\').val(\''.$program->id.'\');';
+            print '$(\'#edit_title\').val(\''.$program->title.'\');';
+            print '$(\'#edit_color\').val(\''.$program->color.'\');';
+            print '$(\'#edit_priority\').val(\''.$program->priority.'\');';              
+            if ($program->from_date != '' && $program->to_date != '')
+            {
+              print '$(\'#edit_from_date\').val(\''.$date_from->format('d.m.Y').'\');';
+              print '$(\'#edit_to_date\').val(\''.$date_to->format('d.m.Y').'\');';       
+            }
+            else
+            {
+              print '$(\'#edit_from_date\').val(\'\');';
+              print '$(\'#edit_to_date\').val(\'\');';                     
+            }
+            print '$(\'#edit_from_time\').val(\''.substr($program->from_time,0,5).'\');';
+            print '$(\'#edit_to_time\').val(\''.substr($program->to_time,0,5).'\');';
+            print '$(\'#edit_max\').val(\''.$program->max.'\');';
+            print '$(\'#edit_min\').val(\''.$program->min.'\');';
+            print '$(\'#edit_sun\').prop(\'checked\','.$program->sun.').checkboxradio(\'refresh\');';
+            print '$(\'#edit_mon\').prop(\'checked\','.$program->mon.').checkboxradio(\'refresh\');';
+            print '$(\'#edit_tue\').prop(\'checked\','.$program->tue.').checkboxradio(\'refresh\');';
+            print '$(\'#edit_wed\').prop(\'checked\','.$program->wed.').checkboxradio(\'refresh\');';
+            print '$(\'#edit_thu\').prop(\'checked\','.$program->thu.').checkboxradio(\'refresh\');';
+            print '$(\'#edit_fri\').prop(\'checked\','.$program->fri.').checkboxradio(\'refresh\');';
+            print '$(\'#edit_sat\').prop(\'checked\','.$program->sat.').checkboxradio(\'refresh\');';        
+          print '" class="program-edit-button ui-button ui-widget ui-corner-all">✎</button> ';
+          print '<button onclick="program_delete('.$program->id.')" class="ui-button ui-widget ui-corner-all">❌ </button>';
+        print '</td>';      
+      }
     print '</tr>';
-    
-    while($row = $result->fetch_assoc())
-    {
-      if ($row['priority'] != 0 && $row['priority'] != 6 && $row['priority'] != 7)
-        print '<tr>';
-      else
-        print '<tr class="manual">';
-        
-        print '<td>';
-          $color = '#999';
-          switch ($row['color'])
-          {
-            case "BLUE":   $color = '#599ad3'; break;
-            case "RED":    $color = '#f1595f'; break;
-            case "GREEN":  $color = '#79c36a'; break;
-            case "YELLOW": $color = '#d0c721'; break;
-          }        
-          print '<div style="float: left; vertical-align: -2px; margin-right: 10px; width: 20px; height: 20px; color: white; text-align: center; background-color: '.$color.'">'.$row['priority'].'</div>';        
-          print $row['title'];
-        print '</td>';
-        print '<td class="period">';
-          if ($row['from_date'] != '' && $row['to_date'] != '')
-          {
-             $date_from = new DateTime($row['from_date']);          
-             $date_to   = new DateTime($row['to_date']);
-             print '<b>'.$date_from->format('d.m.Y').'</b> '.$date_to->format('d.m.Y');              
-          }
-          else print '✖';
-        print '</td>';         
-        print '<td class="time">';
-          print '<b>'.substr($row['from_time'],0,5).'</b>';
-          print '<br />';
-          print substr($row['to_time'],0,5);
-        print '</td>';
-        if ($date->format("w") == 1) $color2 = '#f9a65a'; else $color2 = 'black';
-        print '<td class="small">'; if ($row['mon']) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
-        if ($date->format("w") == 2) $color2 = '#f9a65a'; else $color2 = 'black';
-        print '<td class="small">'; if ($row['tue']) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
-        if ($date->format("w") == 3) $color2 = '#f9a65a'; else $color2 = 'black';
-        print '<td class="small">'; if ($row['wed']) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
-        if ($date->format("w") == 4) $color2 = '#f9a65a'; else $color2 = 'black';
-        print '<td class="small">'; if ($row['thu']) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
-        if ($date->format("w") == 5) $color2 = '#f9a65a'; else $color2 = 'black';
-        print '<td class="small">'; if ($row['fri']) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
-        if ($date->format("w") == 6) $color2 = '#f9a65a'; else $color2 = 'black';
-        print '<td class="small">'; if ($row['sat']) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
-        if ($date->format("w") == 0) $color2 = '#f9a65a'; else $color2 = 'black';
-        print '<td class="small">'; if ($row['sun']) print '<span style="color: '.$color2.'">✔</span>'; else print '<span class="grey">❖</span>'; print '</td>';
-        if ($row['min'] != '' && $row['max'] != '')
-        {
-          print '<td class="temp" style="color:'.$color.'"><b>'.$row['max'].'</b> °C</td>';
-          print '<td class="hyst">'.$row['min'].' °C</td>';
-        }
-        else print '<td colspan="2" style="border-right: 2px solid #ddd;"><i>vytápění vypnuto<i></td>';
-        if ($row['priority'] != 0 && $row['priority'] != 6 && $row['priority'] != 7)
-        {
-          print '<td class="but"  style="border-right: none;">';
-            print '<button onclick="';
-              print '$(\'#edit_id\').val(\''.$row['id'].'\');';
-              print '$(\'#edit_title\').val(\''.$row['title'].'\');';
-              print '$(\'#edit_color\').val(\''.$row['color'].'\');';
-              print '$(\'#edit_priority\').val(\''.$row['priority'].'\');';              
-              if ($row['from_date'] != '' && $row['to_date'] != '')
-              {
-                print '$(\'#edit_from_date\').val(\''.$date_from->format('d.m.Y').'\');';
-                print '$(\'#edit_to_date\').val(\''.$date_to->format('d.m.Y').'\');';       
-              }
-              else
-              {
-                print '$(\'#edit_from_date\').val(\'\');';
-                print '$(\'#edit_to_date\').val(\'\');';                     
-              }
-              print '$(\'#edit_from_time\').val(\''.substr($row['from_time'],0,5).'\');';
-              print '$(\'#edit_to_time\').val(\''.substr($row['to_time'],0,5).'\');';
-              print '$(\'#edit_max\').val(\''.$row['max'].'\');';
-              print '$(\'#edit_min\').val(\''.$row['min'].'\');';
-              print '$(\'#edit_sun\').prop(\'checked\','.$row['sun'].').checkboxradio(\'refresh\');';
-              print '$(\'#edit_mon\').prop(\'checked\','.$row['mon'].').checkboxradio(\'refresh\');';
-              print '$(\'#edit_tue\').prop(\'checked\','.$row['tue'].').checkboxradio(\'refresh\');';
-              print '$(\'#edit_wed\').prop(\'checked\','.$row['wed'].').checkboxradio(\'refresh\');';
-              print '$(\'#edit_thu\').prop(\'checked\','.$row['thu'].').checkboxradio(\'refresh\');';
-              print '$(\'#edit_fri\').prop(\'checked\','.$row['fri'].').checkboxradio(\'refresh\');';
-              print '$(\'#edit_sat\').prop(\'checked\','.$row['sat'].').checkboxradio(\'refresh\');';        
-            print '" class="program-edit-button ui-button ui-widget ui-corner-all">✎</button> ';
-            print '<button onclick="program_delete('.$row['id'].')" class="ui-button ui-widget ui-corner-all">❌ </button>';
-          print '</td>';      
-        }
-      print '</tr>';
-    }
-    print '</table>';
   }
+  print '</table>';
 ?>
 
 <p>

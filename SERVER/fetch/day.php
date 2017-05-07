@@ -43,22 +43,21 @@
     
     $comma2 = false;
     
-    for ($hour = 0; $hour < 24; $hour++)
-  	{
-      for ($minute = 0; $minute < (60/TIME_STEP); $minute++)
-      {
-        if ($comma2 == false) {$comma2 = true;} else {print ',';}
-        
-        print '[';
-          print ($hour*60*60*1000 + $minute*TIME_STEP*60*1000 -3600000);
-        print ',';
-          if (isset($dataset[$display->sensor][$display->class][$hour][$minute]))
-            print($dataset[$display->sensor][$display->class][$hour][$minute]);
-          else
-            print('null');
-        print ']';
-      }  
+    if (isset($dataset[$display->sensor][$display->class]) && is_array($dataset[$display->sensor][$display->class]))
+    foreach (($dataset[$display->sensor][$display->class]) as $row)
+    {
+      if ($comma2 == false) {$comma2 = true;} else {print ',';}
+      print '[';
+        if (!$row['yesterday'])
+          print ($row['hour']*60*60*1000 + $row['minute']*TIME_STEP*60*1000 -3600000);
+        else
+          print ($row['hour']*60*60*1000 + $row['minute']*TIME_STEP*60*1000 -3600000 -86400000);
+      print ',';
+        print($row['value']);
+      print ']';
     }
+    
+    if ($comma2 == false) {print "[0, null]";}
 
     print ("\n". '    ]'. "\n");
     print ('  }'. "\n");

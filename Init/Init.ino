@@ -10,17 +10,20 @@
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>
 
-const char* sensor       = "<5-uppercase-chars>";  //Sensor indentification
-const char* key          = "<enter-server-key>";   //API write key
-const char* adminLogin   = "admin";                //Update firmware login
-const char* adminPasswd  = "admin";                //Update firmware password
-const char* wifiLogin    = "<enter-wifi-login>";   //Wifi login (projects without WiFi manager only)
-const char* wifiPasswd   = "<enter-wifi-passwd>";  //Wifi password (projects without WiFi manager only)
-const char  serialUsed   = true;                   //Console connected
-const char  displayUsed  = true;                   //Display connected
-const char  dallasUsed   = true;                   //Dallas sensor connected
-const char  dhtUsed      = true;                   //DHT sensor connected
-const char  dhtType      = 11;                     //DHT sensor used
+const char* sensor       = "<5-uppercase-chars>";  //Sensor indentification                               //memory 361-380
+const char* key          = "<enter-server-key>";   //API write key                                        //memory 381-400
+const char* adminLogin   = "admin";                //Update firmware login                                //memory 401-420
+const char* adminPasswd  = "admin";                //Update firmware password                             //memory 421-440
+const char* wifiLogin    = "<enter-wifi-login>";   //Wifi login (projects without WiFi manager only)      //memory 441-460
+const char* wifiPasswd   = "<enter-wifi-passwd>";  //Wifi password (projects without WiFi manager only)   //memory 461-480
+const char  serialUsed   = true;                   //Console connected                                    //memory 481
+const char  displayUsed  = true;                   //Display connected                                    //memory 482
+const char  dallasUsed   = true;                   //Dallas sensor connected                              //memory 483
+const char  dhtUsed      = true;                   //DHT sensor connected                                 //memory 484
+const char  dhtType      = 11;                     //DHT sensor used                                      //memory 485
+const char  bmeUsed      = false;                  //BME280 sensor connected                              //memory 486
+const char  outsideUsed  = false;                  //Outside sensor available                             //memory 487
+const char* outsidePath  = "/fetch/outside.php";   //Outside sensor web address                           //memory 488-507
 
       char* host   = "initial";
 const int   offset = 360;
@@ -63,6 +66,9 @@ struct config_t
   char  dallasUsed;
   char  dhtUsed;
   char  dhtType;
+  char  bmeUsed;
+  char  outsideUsed;
+  char  outsidePath[20];
 } memory, data;
 
 void setup()
@@ -92,6 +98,10 @@ void write()
   memory.dallasUsed        = dallasUsed;
   memory.dhtUsed           = dhtUsed;
   memory.dhtType           = dhtType;
+  memory.bmeUsed           = bmeUsed;
+  memory.outsideUsed       = outsideUsed;
+  strcpy(memory.outsidePath, outsidePath);
+
   EEPROM_writeAnything(offset, memory);
   EEPROM.commit();
 }
@@ -108,6 +118,7 @@ void read()
   Serial.println(data.adminPasswd);
   Serial.println(data.wifiLogin);
   Serial.println(data.wifiPasswd);
+  Serial.println(data.outsidePath);
   Serial.println("=====================");
 }
 

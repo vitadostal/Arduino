@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <title>ARDUINO | Sensor Reading</title>
   
-  <link rel="stylesheet" href="/jquery/jquery-ui.css">
   <link rel="stylesheet" type="text/css" href="arduino.css?version=4">
+  <link rel="stylesheet" href="/jquery/jquery-ui.css">
   <link rel="stylesheet" href="jquery-hex-colorpicker/css/jquery-hex-colorpicker.css" />
 
-  <script src="jquery/external/jquery/jquery.js"></script>
+  <script src="jquery/jquery.js"></script>
   <script src="jquery/jquery-ui.js"></script>
   <script src="jquery/jquery.cookie.js"></script>
   <script src="jquery-hex-colorpicker/src/jquery-hex-colorpicker.min.js"></script>

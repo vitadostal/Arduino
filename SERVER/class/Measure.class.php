@@ -88,19 +88,44 @@ class Measure
   
   public static function datasetGraph($db, $displays, $date, $group = 10)
   {
-     $dataset = $db->getByCondition(
+    $result = array();
+
+    //When today: Also part of yesterday is taken into account
+    if ($date == date("Y-m-d")) $result = self::datasetGraphYesterday($result, $db, $displays, $group); 
+
+    $dataset = $db->getByCondition(
       "measure",     
       "HOUR(timestamp) as hour, MINUTE(timestamp) DIV $group as minute, sensor, class, ROUND(AVG(value1), 1) as value",
       "(". Display::whereDisplay($displays). ") AND date(timestamp)='".$date."' GROUP BY sensor, class, hour, minute" 
     );
 		
-    $result = array();
 		foreach($dataset as $row)
 		{
-      $result[$row['sensor']][$row['class']][$row['hour']][$row['minute']] = $row['value'];
+      $row['yesterday'] = false;
+      $result[$row['sensor']][$row['class']][] = $row;
 		}
+    
 		return $result;
   }
+  
+  public static function datasetGraphYesterday($result, $db, $displays, $group = 10)
+  {
+    $dataset = $db->getByCondition(
+      "measure",     
+      "HOUR(timestamp) as hour, MINUTE(timestamp) DIV $group as minute, sensor, class, ROUND(AVG(value1), 1) as value",
+      "(". Display::whereDisplay($displays). ") ".
+      "AND DATE(timestamp) = DATE(NOW() - INTERVAL 1 DAY) AND TIME(timestamp) >= TIME(NOW()) ".
+      "GROUP BY sensor, class, hour, minute" 
+    );
+		
+		foreach($dataset as $row)
+		{
+      $row['yesterday'] = true;
+      $result[$row['sensor']][$row['class']][] = $row;
+		}
+    
+		return $result;
+  }  
   
   public static function loadLastMeasure($db, $sensor, $class)
   {

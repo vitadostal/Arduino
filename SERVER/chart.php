@@ -51,21 +51,21 @@
 
 <script>
   var hours = new Array();
+  for (i = 0; i <= 24; i += 1.5) hours.push(i * 60 * 60 * 1000 -3600000 -86400000);
   for (i = 0; i <= 24; i += 1.5) hours.push(i * 60 * 60 * 1000 -3600000);
 
   nv.addGraph(function() {
-    var
-    chart = nv.models.lineChart()
+    var chart = nv.models.lineChart()
         .useInteractiveGuideline(true)
         .x(function(d) { return d[0] })
         .y(function(d) { return d[1] })
         .interpolate("basis");
 
-    chart.xAxis     //Chart x-axis settings
+    chart.xAxis
         .axisLabel('Čas [h:m]')
         .tickFormat(function(d) { return d3.time.format('%H:%M')(new Date(d)) });
 
-    chart.yAxis     //Chart y-axis settings
+    chart.yAxis
         .axisLabel('<?php print $graph->description. " [". $graph->unit. "]" ?>')
         .tickFormat(d3.format('.1f'));
 
@@ -73,8 +73,8 @@
     
     chart.xAxis.tickValues(hours);    
     
-    chart.xDomain([new Date(0 -3600000), new Date(24 * 60 * 60 * 1000 -3600000)]);            
-                
+    <?php if (Params::$date_sql != date("Y-m-d")) print "chart.xDomain([new Date(0 -3600000), new Date(24 * 60 * 60 * 1000 -3600000)]);"?>            
+    
     d3.json("fetch/day.php?<?php print Utils::sensorQuery(Params::$sensors). '&graph='. Params::$graph. '&date='. Params::$date_czech ?>", function(data) {
       d3.select('#chart-<?php print $graph->graph ?> svg')
         .datum(data)

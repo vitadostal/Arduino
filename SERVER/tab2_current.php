@@ -15,7 +15,7 @@
   $database->connect();
   
   //Objects
-  $sensorSet = Sensor::loadAll($database);  
+  $sensorSet = Sensor::loadAll($database, true);  
   $classSet = XClass::loadAll($database);  
   $measureSet = Measure::loadNews($database, Params::$sensors, 100);
   
@@ -29,6 +29,8 @@
 
     foreach($measureSet as $measure)
     {
+      if (!isset($sensorSet[$measure->sensor])) $sensorSet[$measure->sensor] = Sensor::createSensor($measure->sensor);
+      
       $measure->sensor = $sensorSet[$measure->sensor]; 
       $measure->class = $classSet[$measure->class];
       
