@@ -20,7 +20,7 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.12 / 7 May 2017" ;     //Firmware version
+const String firmware        = "v1.13 / 7 May 2017" ;     //Firmware version
 const int    offset          = 360;                       //EEPROM memory offset
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
@@ -258,8 +258,8 @@ void setupWebServer()
   httpServer.on("/dht-on",      HTTP_GET, []() {writeMemory(484,1);});
   httpServer.on("/dht-off",     HTTP_GET, []() {writeMemory(484,0);});
   httpServer.on("/dht-11",      HTTP_GET, []() {writeMemory(485,11);});
+  httpServer.on("/dht-21",      HTTP_GET, []() {writeMemory(485,21);});
   httpServer.on("/dht-22",      HTTP_GET, []() {writeMemory(485,22);});
-  httpServer.on("/dht-23",      HTTP_GET, []() {writeMemory(485,23);});
 
   httpServer.on("/bme-on",      HTTP_GET, []() {writeMemory(486,1);});
   httpServer.on("/bme-off",     HTTP_GET, []() {writeMemory(486,0);});
@@ -494,8 +494,8 @@ String deviceStatus() {
   if (dhtUsed)      info += ("<li><b>DHT" + String(dhtType) + ":</b>  on  [<a href='dht-off'>turn off</a>]");
                else info += ("<li><b>DHT" + String(dhtType) + ":</b>  off [<a href='dht-on'>turn on</a>]</li>");
   if (dhtUsed && dhtType != 11) info += (" [<a href='dht-11'>use DHT11</a>]");
+  if (dhtUsed && dhtType != 21) info += (" [<a href='dht-21'>use DHT21</a>]");
   if (dhtUsed && dhtType != 22) info += (" [<a href='dht-22'>use DHT22</a>]");
-  if (dhtUsed && dhtType != 23) info += (" [<a href='dht-23'>use DHT23</a>]");
   if (dhtUsed)      info += ("</li>");
   if (bmeUsed)      info += ("<li><b>BME280:</b>  on  [<a href='bme-off'>turn off</a>]</li>");
                else info += ("<li><b>BME280:</b>  off [<a href='bme-on'>turn on</a>]</li>");
