@@ -7,20 +7,24 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266mDNS.h>
+#include <Ticker.h>
 #include <DHT.h>
 #include <WiFiManager.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
-#include <Adafruit_BME280.h>
+#include <TickerScheduler.h>
+#include <Adafruit_BME280.h> //!!!Warning!!! the official library was changed, changes are listed below:
+  //Adafruit_BME280.h  line 169: bool begin(uint8_t addr = BME280_ADDRESS, uint8_t sda = 4, uint8_t scl = 5);
+  //Adafruit_BME280.cpp line 43: bool Adafruit_BME280::begin(uint8_t addr, uint8_t _sda, uint8_t _scl)
+  //Adafruit_BME280.cpp line 50: Wire.begin(_sda, _scl);
 #include "SSD1306Brzo.h"
 #include "images.h"
-#include "Timer.h"
 
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.13 / 7 May 2017" ;     //Firmware version
+const String firmware        = "v1.14 / 8 May 2017" ;     //Firmware version
 const int    offset          = 360;                       //EEPROM memory offset
 
 const int    interval        = 60;                        //Next measure on success (in seconds)
@@ -37,16 +41,18 @@ const char*  update_path     = "/firmware";               //Firmware update path
       byte   displayUsed     = 255; //255 = <from-eeprom> //Display connected
       byte   dallasUsed      = 255; //255 = <from-eeprom> //Dallas sensor connected
       byte   dhtUsed         = 255; //255 = <from-eeprom> //DHT sensor connected
-      byte   dhtType         = 255; //255 = <from-eeprom> //DHT sensor used
-      byte   bmeUsed         = 255; //255 = <from-eeprom> //BME580 sensor used
-      byte   outsideUsed     = 255; //255 = <from-eeprom> //DHT sensor connected      
+      byte   dhtType         = 255; //255 = <from-eeprom> //Type of DHT sensor
+      byte   bmeUsed         = 255; //255 = <from-eeprom> //BME580 sensor connected
+      byte   bmePins         = 255; //255 = <from-eeprom> //BME580 sensor on alternative pins
+      byte   outsideUsed     = 255; //255 = <from-eeprom> //Get readings from external site
+      byte   reporting       = 255; //255 = <from-eeprom> //Report readings to server      
 
 #define DALLAS_PIN           0                            //Dallas DS18B20 DATA
 #define DISPLAY_SDA          1                            //SSD1306 sDATA
 #define DHT_PIN              2                            //DHT11 DATA
 #define DISPLAY_SCL          3                            //SSD1306 sCLOCK
-#define BME_SDA              4                            //BME580 sDATA
-#define BME_SCL              5                            //BME580 sCLOCK
+   byte BME_SDA            = 4;                           //BME580 sDATA
+   byte BME_SCL            = 5;                           //BME580 sCLOCK
 #define DISPLAY_ADDRESS      0x3c                         //SSD1306 128x64 I2C address
 #define BME_ADDRESS          0x76                         //BME580 I2C address
 #define SENSORS              10                           //Total number of sensors below plus one
@@ -62,7 +68,7 @@ Adafruit_BME280 bme;
 SSD1306Brzo display(DISPLAY_ADDRESS, DISPLAY_SDA, DISPLAY_SCL);
 OneWire oneWire(DALLAS_PIN);
 DallasTemperature dallas(&oneWire);
-Timer t;
+TickerScheduler ts(5);
 unsigned long lastExecutionTime;
 short mem = 1;
 float mem_val[SENSORS];
@@ -71,7 +77,7 @@ String host;
 template <class T> int EEPROM_readAnything(int ee, T& value)
 {
   byte* p = (byte*)(void*)&value;
-  unsigned int i; 
+  unsigned int i;
   for (i = 0; i < sizeof(value); i++)
     *p++ = EEPROM.read(ee++);
   return i;
@@ -83,7 +89,7 @@ void setup() {
   readMemory();
 
   //Init serial line
-  if ((!displayUsed || DISPLAY_SDA != 1) && serialUsed)
+  if ((!displayUsed || DISPLAY_SDA != 1) && serialUsed && bmePins != 2)
   {
     Serial.begin(115200);
     Serial.println();
@@ -101,7 +107,12 @@ void setup() {
   }
 
   //Init BME280
-  if (bmeUsed) bme.begin(BME_ADDRESS);
+  if (bmeUsed)
+  {
+    if (bmePins == 1) {BME_SDA = 0; BME_SCL = 2;}
+    if (bmePins == 2) {BME_SDA = 1; BME_SCL = 3;}
+    bme.begin(BME_ADDRESS, BME_SDA, BME_SCL);
+  }
   if (displayUsed) drawProgressBar(10);
 
   //Init Dallas
@@ -140,12 +151,15 @@ void setup() {
   setupWebServer();
   if (displayUsed) drawProgressBar(70);  
 
-  //Timer
-  t.every(interval * 1000, takeReading, 0);
-  t.every(100, handleClient, 0);
-  if (displayUsed) t.every(1000, updateExecutionTime, 0);
-  if (displayUsed) t.every(screen_cycle * 1000, updatePageDisplayed, 0);
-  if (displayUsed) drawProgressBar(100);
+  //Scheduler
+  ts.add(1, interval * 1000, takeReading, 0, false);
+  ts.add(2, 100, handleClient, 0, false);
+  if (displayUsed)
+  {
+    ts.add(3, 1000, updateExecutionTime, 0, false);
+    ts.add(4, screen_cycle * 1000, updatePageDisplayed, 0, false);
+    drawProgressBar(100);
+  }
 
   //Show data on display
   float t1, t2, t3, t, h, tb, hb, pb, to;
@@ -155,8 +169,7 @@ void setup() {
 
 void loop()
 {
-  t.update();
-  //httpServer.handleClient();
+  ts.update();
 }
 
 void handleClient(void* context)
@@ -181,6 +194,10 @@ void infoMemory()
   space = round(space);
   Serial.print(space);
   Serial.println(" kB");
+
+  //Last reset cause
+  Serial.print("Last reset: ");
+  Serial.println(ESP.getResetReason());
   Serial.println();
 }
 
@@ -202,6 +219,8 @@ void readMemory()
     char  bmeUsed;
     char  outsideUsed;
     char  outsidePath[20];
+    char  bmePins;
+    char  reporting;
   } memory; 
   
   EEPROM.begin(512);
@@ -218,6 +237,8 @@ void readMemory()
   if (bmeUsed         == 255)             bmeUsed         = byte(memory.bmeUsed);
   if (outsideUsed     == 255)             outsideUsed     = byte(memory.outsideUsed);
   if (outside_path    == "<from-eeprom>") outside_path    = memory.outsidePath;
+  if (bmePins         == 255)             bmePins         = byte(memory.bmePins);
+  if (reporting       == 255)             reporting       = byte(memory.reporting);
 
   //Defaults
   if (serialUsed      == 255)             serialUsed      = true;
@@ -228,6 +249,8 @@ void readMemory()
   if (bmeUsed         == 255)             bmeUsed         = false;
   if (outsideUsed     == 255)             outsideUsed     = false;
   if (outside_path    == "")              outside_path    = "/fetch/outside.php";
+  if (bmePins         == 255)             bmePins         = 0;
+  if (reporting       == 255)             reporting       = true;
 }
 
 void setupWifi()
@@ -249,23 +272,29 @@ void setupWebServer()
     httpServer.send(200, "text/html", deviceStatus());
   });
 
-  httpServer.on("/display-on",  HTTP_GET, []() {writeMemory(482,1);});
-  httpServer.on("/display-off", HTTP_GET, []() {writeMemory(482,0);});
+  httpServer.on("/display-on",    HTTP_GET, []() {writeMemory(482,1);});
+  httpServer.on("/display-off",   HTTP_GET, []() {writeMemory(482,0);});
 
-  httpServer.on("/dallas-on",   HTTP_GET, []() {writeMemory(483,1);});
-  httpServer.on("/dallas-off",  HTTP_GET, []() {writeMemory(483,0);});
+  httpServer.on("/dallas-on",     HTTP_GET, []() {writeMemory(483,1);});
+  httpServer.on("/dallas-off",    HTTP_GET, []() {writeMemory(483,0);});
 
-  httpServer.on("/dht-on",      HTTP_GET, []() {writeMemory(484,1);});
-  httpServer.on("/dht-off",     HTTP_GET, []() {writeMemory(484,0);});
-  httpServer.on("/dht-11",      HTTP_GET, []() {writeMemory(485,11);});
-  httpServer.on("/dht-21",      HTTP_GET, []() {writeMemory(485,21);});
-  httpServer.on("/dht-22",      HTTP_GET, []() {writeMemory(485,22);});
+  httpServer.on("/dht-on",        HTTP_GET, []() {writeMemory(484,1);});
+  httpServer.on("/dht-off",       HTTP_GET, []() {writeMemory(484,0);});
+  httpServer.on("/dht-11",        HTTP_GET, []() {writeMemory(485,11);});
+  httpServer.on("/dht-21",        HTTP_GET, []() {writeMemory(485,21);});
+  httpServer.on("/dht-22",        HTTP_GET, []() {writeMemory(485,22);});
 
-  httpServer.on("/bme-on",      HTTP_GET, []() {writeMemory(486,1);});
-  httpServer.on("/bme-off",     HTTP_GET, []() {writeMemory(486,0);});
+  httpServer.on("/bme-on",        HTTP_GET, []() {writeMemory(486,1);});
+  httpServer.on("/bme-off",       HTTP_GET, []() {writeMemory(486,0);});
+  httpServer.on("/bme-0",         HTTP_GET, []() {writeMemory(508,0);});
+  httpServer.on("/bme-1",         HTTP_GET, []() {writeMemory(508,1);});
+  httpServer.on("/bme-2",         HTTP_GET, []() {writeMemory(508,2);});
 
-  httpServer.on("/outside-on",  HTTP_GET, []() {writeMemory(487,1);});
-  httpServer.on("/outside-off", HTTP_GET, []() {writeMemory(487,0);});  
+  httpServer.on("/outside-on",    HTTP_GET, []() {writeMemory(487,1);});
+  httpServer.on("/outside-off",   HTTP_GET, []() {writeMemory(487,0);});  
+
+  httpServer.on("/reporting-on",  HTTP_GET, []() {writeMemory(509,1);});
+  httpServer.on("/reporting-off", HTTP_GET, []() {writeMemory(509,0);});  
   
   httpServer.begin();
   MDNS.addService("http", "tcp", 80);
@@ -400,6 +429,9 @@ void takeReading(void* context)
   float t1, t2, t3, t, h, tb, hb, pb, to;
   readSensors(t1, t2, t3, t, h, tb, hb, pb, to);
 
+  //Readings reporting is disabled
+  if (!reporting) return;
+
   //Push data to server
   Serial.println("Connecting to server " + String(server) + "...");
   WiFiClient client;
@@ -486,21 +518,31 @@ String deviceStatus() {
   info += ("<br />");
   info += ("<br />");
 
+  String on   = "<span style='color: green'>ON</span>";
+  String off  = "<span style='color: red'>OFF</span>";
+  String type = String(dhtType);
+
   info += ("<b>Settings</b><ul style='padding-top: 0; margin-top: 0;'>");
-  if (displayUsed)  info += ("<li><b>Display:</b> on  [<a href='display-off'>turn off</a>]</li>");
-               else info += ("<li><b>Display:</b> off [<a href='display-on'>turn on</a>]</li>");
-  if (dallasUsed)   info += ("<li><b>Dallas:</b>  on  [<a href='dallas-off'>turn off</a>]</li>");
-               else info += ("<li><b>Dallas:</b>  off [<a href='dallas-on'>turn on</a>]</li>");
-  if (dhtUsed)      info += ("<li><b>DHT" + String(dhtType) + ":</b>  on  [<a href='dht-off'>turn off</a>]");
-               else info += ("<li><b>DHT" + String(dhtType) + ":</b>  off [<a href='dht-on'>turn on</a>]</li>");
-  if (dhtUsed && dhtType != 11) info += (" [<a href='dht-11'>use DHT11</a>]");
-  if (dhtUsed && dhtType != 21) info += (" [<a href='dht-21'>use DHT21</a>]");
-  if (dhtUsed && dhtType != 22) info += (" [<a href='dht-22'>use DHT22</a>]");
+  if (displayUsed)  info += ("<li><b>Display:</b> "+on+"  [<a href='display-off'>turn off</a>]</li>");
+               else info += ("<li><b>Display:</b> "+off+" [<a href='display-on'>turn on</a>]</li>");
+  if (dallasUsed)   info += ("<li><b>Dallas:</b>  "+on+"  [<a href='dallas-off'>turn off</a>]</li>");
+               else info += ("<li><b>Dallas:</b>  "+off+" [<a href='dallas-on'>turn on</a>]</li>");
+  if (dhtUsed)      info += ("<li><b>DHT"+type+":</b>  "+on+"  [<a href='dht-off'>turn off</a>]");
+               else info += ("<li><b>DHT"+type+":</b>  "+off+" [<a href='dht-on'>turn on</a>]</li>");
+  if (dhtUsed && dhtType != 11) info += (" [<a href='dht-11'>model DHT11</a>]");
+  if (dhtUsed && dhtType != 21) info += (" [<a href='dht-21'>model DHT21</a>]");
+  if (dhtUsed && dhtType != 22) info += (" [<a href='dht-22'>model DHT22</a>]");
   if (dhtUsed)      info += ("</li>");
-  if (bmeUsed)      info += ("<li><b>BME280:</b>  on  [<a href='bme-off'>turn off</a>]</li>");
-               else info += ("<li><b>BME280:</b>  off [<a href='bme-on'>turn on</a>]</li>");
-  if (outsideUsed)  info += ("<li><b>Outside:</b> on  [<a href='outside-off'>turn off</a>]</li>");
-               else info += ("<li><b>Outside:</b> off [<a href='outside-on'>turn on</a>]</li>");
+  if (bmeUsed)      info += ("<li><b>BME280:</b>  "+on+"  [<a href='bme-off'>turn off</a>]");
+               else info += ("<li><b>BME280:</b>  "+off+" [<a href='bme-on'>turn on</a>]</li>");
+  if (bmeUsed && bmePins !=  1) info += (" [<a href='bme-1'>wire GPIO0+2</a>]");
+  if (bmeUsed && bmePins !=  2) info += (" [<a href='bme-2'>wire GPIO1+3</a>]");
+  if (bmeUsed && bmePins !=  0) info += (" [<a href='bme-0'>wire GPIO4+5</a>]");
+  if (bmeUsed)      info += ("</li>");
+  if (outsideUsed)  info += ("<li><b>Outside:</b> "+on+"  [<a href='outside-off'>turn off</a>]</li>");
+               else info += ("<li><b>Outside:</b> "+off+" [<a href='outside-on'>turn on</a>]</li>");
+  if (reporting)    info += ("<li><b>Reporting:</b> "+on+"  [<a href='reporting-off'>turn off</a>]</li>");
+               else info += ("<li><b>Reporting:</b> "+off+" [<a href='reporting-on'>turn on</a>]</li>");
   info += ("</ul>");
 
   info += ("<b>Schema</b><ul style='padding-top: 0; margin-top: 0;'>");
@@ -553,11 +595,12 @@ void readSensorBME(float &t, float &h, float &p)
   h = bme.readHumidity();
   p = bme.readPressure();
   
-  if (t == NAN)
+  if (t == NAN || t < -100 || t > 100 || p > 10000000 || (t == 0 && h == 0 && p == 0))
   {
     Serial.println("Failed to read from BME sensor!");
+    t = h = p = NAN;
     return;
-  }  
+  }
 
   Serial.println("BME280 | Measured data: " + String(t) + "°C " + String(h) + "% " + String(p) + "Pa");
 }
