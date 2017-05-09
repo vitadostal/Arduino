@@ -10,5 +10,12 @@
   $database->connect();
 
   //Objects
-  $measure = Measure::loadLastMeasure($database, SENSOR_OUT, CLASS_OUT);
-  print $measure->value1;  
+  $measureTemp = Measure::loadLastMeasure($database, TEMP_SENSOR_OUT, TEMP_CLASS_OUT);
+  $measureHmdt = Measure::loadLastMeasure($database, HMDT_SENSOR_OUT, HMDT_CLASS_OUT);
+  $measurePres = Measure::loadLastMeasure($database, PRES_SENSOR_OUT, PRES_CLASS_OUT);
+
+  print $measureTemp->value1;
+  print ';';  
+  print $measureHmdt->value1;
+  print ';';  
+  print $measurePres->value1;

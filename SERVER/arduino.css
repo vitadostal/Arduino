@@ -11,6 +11,9 @@
   .footer {color: #ccc; font-family: sans-serif;}
   .grey {color: #ddd;}  
   .darker {color: #888;}
+
+  .black {color: black;}
+  .orange {color: #f9a65a;}  
   
   .graph {min-height: 500px; min-width: 100px;} 
   
@@ -21,7 +24,7 @@
   table.default .right20 {margin-right: 20px;} 
 
   table.default .icon {width: 20px;}
-  table.default  .wider {width: 40px;}
+  table.default .wider {width: 40px;}
   
   table.default .shortertext {width: 70px;}
   table.default .mediumtext {width: 140px;}
@@ -33,7 +36,8 @@
   
   hr {border: none; border-top: 1px solid #ccc;}
 
-  h1 {font-size: 22px; font-family: sans-serif; text-transform: uppercase; border-bottom: 2px solid black;}
+  h1 {font-size: 22px; font-family: sans-serif; text-transform: uppercase;
+      border-bottom: 2px solid black; text-align: center;}
   
   table.default th, table.default td
   {
@@ -63,7 +67,10 @@
   #program th.but, #program td.but {width: 140px;}
   #program tr.manual td.small {color: #ddd;} 
   #program tr.manual td.period {color: #ddd;} 
-  #program tr.manual td.time {color: #ddd;} 
+  #program tr.manual td.time {color: #ddd;}
+
+  .border-right {border-right: 2px solid #ddd;}
+  .noborder-right {border-right: none;}
 
   .program-op label.standard {display:block;}
   .program-op label.checkbox {margin-bottom: 12px;}
@@ -80,4 +87,12 @@
   .floatleft {float: left;}
   .floatright {float: right;}
   .clear {clear: both;}
-  .colorbox {clear: both; margin-right: 10px; width: 20px; height: 20px;}
+  .colorbox {clear: both; margin-right: 10px; width: 20px; height: 20px;}  
+  .colorbox-prog {margin-right: 10px; width: 20px; height: 20px; color: white; text-align: center;}
+  
+  .vert2 {vertical-align: -2px;} 
+  
+  .invisible {position:absolute; top:-1000px;}
+  
+  html .input-passwd {background-color:white; text-align:left;}
+  html .input-temp {background-color:white; text-align:left; width:50px;}

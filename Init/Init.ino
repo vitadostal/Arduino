@@ -3,12 +3,12 @@
 //Vitezslav Dostal | started 03.03.2017
 
 #include <EEPROM.h>
-#include "Timer.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>
+#include <TickerScheduler.h>
 
 const char* sensor       = "<5-uppercase-chars>";  //Sensor indentification                               //memory 361-380
 const char* key          = "<enter-server-key>";   //API write key                                        //memory 381-400
@@ -20,10 +20,14 @@ const char  serialUsed   = true;                   //Console connected          
 const char  displayUsed  = true;                   //Display connected                                    //memory 482
 const char  dallasUsed   = true;                   //Dallas sensor connected                              //memory 483
 const char  dhtUsed      = true;                   //DHT sensor connected                                 //memory 484
-const char  dhtType      = 11;                     //DHT sensor used                                      //memory 485
+const char  dhtType      = 11;                     //Type of DHT sensor                                   //memory 485
 const char  bmeUsed      = false;                  //BME280 sensor connected                              //memory 486
-const char  outsideUsed  = false;                  //Outside sensor available                             //memory 487
-const char* outsidePath  = "/fetch/outside.php";   //Outside sensor web address                           //memory 488-507
+const char  outsideUsed  = false;                  //Get readings from external site                      //memory 487
+const char* outsidePath  = "/fetch/outside.php";   //Outside temperature path                             //memory 488-507
+const char  bmePins      = 0;                      //BME580 sensor on alternative pins                    //memory 508
+const char  reporting    = true;                   //Report readings to server                            //memory 509
+const char  interval     = 1;                      //Next measure (in minutes)                            //memory 510
+const char  sleepMode    = false;                  //Deep sleep between measures                          //memory 511
 
       char* host   = "initial";
 const int   offset = 360;
@@ -31,7 +35,7 @@ const int   offset = 360;
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
 
-Timer t;
+TickerScheduler ts(5);
 int address = 0;
 byte value, value1, value2, value3, value4, value5, value6, value7, value8, value9, value10;
 
@@ -69,6 +73,10 @@ struct config_t
   char  bmeUsed;
   char  outsideUsed;
   char  outsidePath[20];
+  char  bmePins;
+  char  reporting;
+  char  interval;
+  char  sleepMode;
 } memory, data;
 
 void setup()
@@ -82,7 +90,7 @@ void setup()
   setupWifi();
   setupWebServer(host);
 
-  t.every(500, showMemory, 0);
+  ts.add(1, 500, showMemory, 0, false);
 }
 
 void write()
@@ -101,6 +109,10 @@ void write()
   memory.bmeUsed           = bmeUsed;
   memory.outsideUsed       = outsideUsed;
   strcpy(memory.outsidePath, outsidePath);
+  memory.bmePins           = bmePins;
+  memory.reporting         = reporting;
+  memory.interval          = interval;
+  memory.sleepMode         = sleepMode;
 
   EEPROM_writeAnything(offset, memory);
   EEPROM.commit();
@@ -140,7 +152,7 @@ void setupWebServer(char host[])
 
 void loop()
 {
-  t.update();
+  ts.update();
   httpServer.handleClient();  
 }
 

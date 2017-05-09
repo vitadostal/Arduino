@@ -9,6 +9,7 @@ class Params
   public static $date_czech;
   public static $date_czech_next;    
   public static $date_sql;    
+  public static $date_day;    
   public static $title;    
   public static $new;    
   public static $implicit;    
@@ -23,7 +24,8 @@ class Params
     if (!is_array(self::$sensors)) self::$sensors = array(self::$sensors);
       
     self::$date = new DateTime(self::$date_czech);
-    self::$date_sql = self::$date->format('Y-m-d');          
+    self::$date_sql = self::$date->format('Y-m-d');  
+    self::$date_day = self::$date->format('w');        
   }
   
   public static function advanced()

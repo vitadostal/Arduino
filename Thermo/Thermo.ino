@@ -7,13 +7,12 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266mDNS.h>
-#include <Ticker.h>
 #include <DHT.h>
 #include <WiFiManager.h>
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include <TickerScheduler.h>
-#include <Adafruit_BME280.h> //!!!Warning!!! the official library was changed, changes are listed below:
+#include <Adafruit_BME280.h> //!!!Warning!!! the official library has been changed, changes are listed below:
   //Adafruit_BME280.h  line 169: bool begin(uint8_t addr = BME280_ADDRESS, uint8_t sda = 4, uint8_t scl = 5);
   //Adafruit_BME280.cpp line 43: bool Adafruit_BME280::begin(uint8_t addr, uint8_t _sda, uint8_t _scl)
   //Adafruit_BME280.cpp line 50: Wire.begin(_sda, _scl);
@@ -24,10 +23,10 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.14 / 8 May 2017" ;     //Firmware version
+const String firmware        = "v1.15 / 9 May 2017" ;     //Firmware version
 const int    offset          = 360;                       //EEPROM memory offset
 
-const int    interval        = 60;                        //Next measure on success (in seconds)
+      byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
 const int    pause           = 250;                       //Next measure on error (in milliseconds)
 const int    attempts        = 12;                        //Number of tries
 const int    screen_cycle    = 3;                         //Switching sensors on display screen (in seconds)
@@ -45,7 +44,8 @@ const char*  update_path     = "/firmware";               //Firmware update path
       byte   bmeUsed         = 255; //255 = <from-eeprom> //BME580 sensor connected
       byte   bmePins         = 255; //255 = <from-eeprom> //BME580 sensor on alternative pins
       byte   outsideUsed     = 255; //255 = <from-eeprom> //Get readings from external site
-      byte   reporting       = 255; //255 = <from-eeprom> //Report readings to server      
+      byte   reporting       = 255; //255 = <from-eeprom> //Report readings to server
+      byte   sleepMode       = 255; //255 = <from-eeprom> //Deep sleep between measures
 
 #define DALLAS_PIN           0                            //Dallas DS18B20 DATA
 #define DISPLAY_SDA          1                            //SSD1306 sDATA
@@ -55,11 +55,12 @@ const char*  update_path     = "/firmware";               //Firmware update path
    byte BME_SCL            = 5;                           //BME580 sCLOCK
 #define DISPLAY_ADDRESS      0x3c                         //SSD1306 128x64 I2C address
 #define BME_ADDRESS          0x76                         //BME580 I2C address
-#define SENSORS              10                           //Total number of sensors below plus one
+#define SENSORS              12                           //Total number of sensors below plus one
 
-//Counter                        1           2           3           4      5      6         7         8         9
-String mem_desc[SENSORS] = {"", "DALLAS 1", "DALLAS 2", "DALLAS 3", "DHT", "DHT", "BME280", "BME280", "BME280", "OUTSIDE"};
-String mem_unit[SENSORS] = {"", "°C",       "°C",       "°C",       "°C",  "%",   "°C",     "%",      "hPa",    "°C"};
+//Counter                        1           2           3           4      5      6         7         8         9          10         11
+String mem_desc[SENSORS] = {"", "DALLAS 1", "DALLAS 2", "DALLAS 3", "DHT", "DHT", "BME280", "BME280", "BME280", "OUTSIDE", "OUTSIDE", "OUTSIDE"};
+String mem_unit[SENSORS] = {"", "°C",       "°C",       "°C",       "°C",  "%",   "°C",     "%",      "hPa",    "°C",      "%",       "hPa"};
+bool   mem_disp[SENSORS] = {0,   true,       true,       true,       true,  true,  true,     true,     true,     true,      true,      true};
 
 ESP8266WebServer httpServer(80);
 ESP8266HTTPUpdateServer httpUpdater;
@@ -152,7 +153,7 @@ void setup() {
   if (displayUsed) drawProgressBar(70);  
 
   //Scheduler
-  ts.add(1, interval * 1000, takeReading, 0, false);
+  ts.add(1, interval * 60 * 1000, takeReading, 0, false);
   ts.add(2, 100, handleClient, 0, false);
   if (displayUsed)
   {
@@ -162,9 +163,9 @@ void setup() {
   }
 
   //Show data on display
-  float t1, t2, t3, t, h, tb, hb, pb, to;
+  float t1, t2, t3, t, h, tb, hb, pb, to, ho, po;
   lastExecutionTime = millis();
-  readSensors(t1, t2, t3, t, h, tb, hb, pb, to);
+  readSensors(t1, t2, t3, t, h, tb, hb, pb, to, ho, po);
 }
 
 void loop()
@@ -221,6 +222,8 @@ void readMemory()
     char  outsidePath[20];
     char  bmePins;
     char  reporting;
+    char  interval;
+    char  sleepMode;
   } memory; 
   
   EEPROM.begin(512);
@@ -239,6 +242,8 @@ void readMemory()
   if (outside_path    == "<from-eeprom>") outside_path    = memory.outsidePath;
   if (bmePins         == 255)             bmePins         = byte(memory.bmePins);
   if (reporting       == 255)             reporting       = byte(memory.reporting);
+  if (interval        == 255)             interval        = byte(memory.interval);
+  if (sleepMode       == 255)             sleepMode       = byte(memory.sleepMode);
 
   //Defaults
   if (serialUsed      == 255)             serialUsed      = true;
@@ -251,6 +256,8 @@ void readMemory()
   if (outside_path    == "")              outside_path    = "/fetch/outside.php";
   if (bmePins         == 255)             bmePins         = 0;
   if (reporting       == 255)             reporting       = true;
+  if (interval        == 255)             interval        = 1;
+  if (sleepMode       == 255)             sleepMode       = false;
 }
 
 void setupWifi()
@@ -295,6 +302,13 @@ void setupWebServer()
 
   httpServer.on("/reporting-on",  HTTP_GET, []() {writeMemory(509,1);});
   httpServer.on("/reporting-off", HTTP_GET, []() {writeMemory(509,0);});  
+
+  httpServer.on("/interval-1",    HTTP_GET, []() {writeMemory(510,1);});
+  httpServer.on("/interval-5",    HTTP_GET, []() {writeMemory(510,5);});
+  httpServer.on("/interval-10",   HTTP_GET, []() {writeMemory(510,10);});
+  httpServer.on("/interval-15",   HTTP_GET, []() {writeMemory(510,15);});
+  httpServer.on("/interval-30",   HTTP_GET, []() {writeMemory(510,30);});
+  httpServer.on("/interval-60",   HTTP_GET, []() {writeMemory(510,60);});
   
   httpServer.begin();
   MDNS.addService("http", "tcp", 80);
@@ -384,7 +398,7 @@ void drawComputer() {
   display.display();
 }
 
-void readSensors(float &t1, float &t2, float &t3, float &t, float &h, float &tb, float &hb, float &pb, float &to)
+void readSensors(float &t1, float &t2, float &t3, float &t, float &h, float &tb, float &hb, float &pb, float &to, float &ho, float &po)
 {
   if (displayUsed) drawComputer();
   
@@ -392,7 +406,7 @@ void readSensors(float &t1, float &t2, float &t3, float &t, float &h, float &tb,
   readSensorDallas (t1, t2, t3);
   readSensorDHT (t, h);
   readSensorBME (tb, hb, pb);
-  readOutside (to);
+  readOutside (to, ho, po);
   
   //Show one value on display
   mem_val[1] = t1;
@@ -404,12 +418,14 @@ void readSensors(float &t1, float &t2, float &t3, float &t, float &h, float &tb,
   mem_val[7] = hb;
   mem_val[8] = pb;
   mem_val[9] = to;
+  mem_val[10] = ho;
+  mem_val[11] = po;
   if (displayUsed) drawValues();
 }
 
 void updateExecutionTime(void* context)
 {
-  int progress = round((float(millis() - lastExecutionTime) / ((float)interval * 10)) * 1.03);
+  int progress = round((float(millis() - lastExecutionTime) / ((float)interval *60 * 10)) * 1.02);
   if (progress > 100) progress = 100;
   drawBottomProgressBar(progress);
 }
@@ -426,8 +442,8 @@ void takeReading(void* context)
   lastExecutionTime = millis();
   
   Serial.println();
-  float t1, t2, t3, t, h, tb, hb, pb, to;
-  readSensors(t1, t2, t3, t, h, tb, hb, pb, to);
+  float t1, t2, t3, t, h, tb, hb, pb, to, ho, po;
+  readSensors(t1, t2, t3, t, h, tb, hb, pb, to, ho, po);
 
   //Readings reporting is disabled
   if (!reporting) return;
@@ -467,7 +483,7 @@ void takeReading(void* context)
     Serial.println("Data sent");
   }
   client.stop();
-  Serial.println("Waiting for " + String(interval) + " seconds...");
+  Serial.println("Waiting for " + String(interval) + " minute(s)...");
 }
 
 String deviceStatus() {
@@ -501,12 +517,12 @@ String deviceStatus() {
   info += ("<br />");
 
   Serial.println();
-  float t1, t2, t3, t, h, tb, hb, pb, to;
-  readSensors(t1, t2, t3, t, h, tb, hb, pb, to);
+  float t1, t2, t3, t, h, tb, hb, pb, to, ho, po;
+  readSensors(t1, t2, t3, t, h, tb, hb, pb, to, ho, po);
   if (dallasUsed)  info += ("<b>DS18B20 Readings:</b> " + String(t1) + " &#8451; | " + String(t2) + " &#8451; | " + String(t3) + " &#8451;<br />");
   if (dhtUsed)     info += ("<b>DHT" + String(dhtType) + " Readings:</b> " + String(t) + " &#8451; | " + String(h) + " %<br />");
   if (bmeUsed)     info += ("<b>BME280 Readings:</b> " + String(tb) + " &#8451; | " + String(hb) + " % | " + String(pb) + " Pa<br />");
-  if (outsideUsed) info += ("<b>Outside:</b> " + String(to) + " &#8451;<br />");
+  if (outsideUsed) info += ("<b>Outside:</b> " + String(to) + " &#8451; | " + String(ho) + " % | " + String(po) + " hPa<br />");
 
   info += ("<b>Firmware:</b> ");
   info += (firmware);
@@ -520,6 +536,7 @@ String deviceStatus() {
 
   String on   = "<span style='color: green'>ON</span>";
   String off  = "<span style='color: red'>OFF</span>";
+  String na   = "<span style='color: #ff8000'>";
   String type = String(dhtType);
 
   info += ("<b>Settings</b><ul style='padding-top: 0; margin-top: 0;'>");
@@ -542,7 +559,15 @@ String deviceStatus() {
   if (outsideUsed)  info += ("<li><b>Outside:</b> "+on+"  [<a href='outside-off'>turn off</a>]</li>");
                else info += ("<li><b>Outside:</b> "+off+" [<a href='outside-on'>turn on</a>]</li>");
   if (reporting)    info += ("<li><b>Reporting:</b> "+on+"  [<a href='reporting-off'>turn off</a>]</li>");
-               else info += ("<li><b>Reporting:</b> "+off+" [<a href='reporting-on'>turn on</a>]</li>");
+               else info += ("<li><b>Reporting:</b> "+off+" [<a href='reporting-on'>turn on</a>]</li>");  
+                    info += ("<li><b>Interval:</b> "+na+ String(interval) + " minute(s)</span>");
+  if (interval !=  1) info += (" [<a href='interval-1'>1 min</a>]");
+  if (interval !=  5) info += (" [<a href='interval-5'>5 min</a>]");
+  if (interval != 10) info += (" [<a href='interval-10'>10 min</a>]");
+  if (interval != 15) info += (" [<a href='interval-15'>¼ h</a>]");
+  if (interval != 30) info += (" [<a href='interval-30'>½ h</a>]");
+  if (interval != 60) info += (" [<a href='interval-60'>1 h</a>]");
+                    info += ("</li>");
   info += ("</ul>");
 
   info += ("<b>Schema</b><ul style='padding-top: 0; margin-top: 0;'>");
@@ -627,11 +652,11 @@ void readSensorDallas(float &t1, float &t2, float &t3)
   Serial.println("Dallas | Measured data: " + String(t1) + "°C " + String(t2) + "°C " + String(t3) + "°C");
 }
 
-void readOutside(float &t)
+void readOutside(float &t, float &h, float &p)
 {
-  if (!outsideUsed) {t = NAN; return;}
+  if (!outsideUsed) {t = h = p = NAN; return;}
 
-  String line;
+  String line, part;
   
   WiFiClient client;
   if (client.connect(server, 80))
@@ -652,15 +677,27 @@ void readOutside(float &t)
   }
   client.stop();
   
-  if (line == "" || line.length() > 10)
+  if (line == "" || line.length() > 30)
   {
     Serial.println("Failed to read outside sensor!");
-    t = NAN;
+    t = h = p = NAN;
     return;    
-  }  
+  }
+
+  //Temperature
+  part = line.substring(0, line.indexOf(";"));
+  t = part.toFloat();
+  line = line.substring(line.indexOf(";")+1);
   
-  t = line.toFloat();
-  Serial.println("Outside | Received data: " + String(t) + "°C ");
+  //Humidity
+  part = line.substring(0, line.indexOf(";"));
+  h = part.toFloat();
+  line = line.substring(line.indexOf(";")+1);
+
+  //Pressure
+  p = line.toFloat();
+
+  Serial.println("Outside | Received data: " + String(t) + "°C " + String(h) + "% " + String(p) + "Pa");
 }
 
 float roundTenth(float t)

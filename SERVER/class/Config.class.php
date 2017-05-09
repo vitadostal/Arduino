@@ -1,6 +1,7 @@
 <?php
 
-//Load constants DB_LOGIN, DB_PASSWD, API_KEY, PRG_PASSWD, SENSOR_OUT, CLASS_OUT
+//Load constants DB_LOGIN, DB_PASSWD, API_KEY, PRG_PASSWD,
+//TEMP_SENSOR_OUT, TEMP_CLASS_OUT, HMDT_SENSOR_OUT, HMDT_CLASS_OUT, PRES_SENSOR_OUT, PRES_CLASS_OUT
 include "/home/vdostal/private_html/arduino.php";
 
 //Inline constatns

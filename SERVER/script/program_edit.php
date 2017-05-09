@@ -63,7 +63,7 @@
   if ($title     == '') return;
   if ($color     == '') return;
   if ($priority  == '') return;
-  if ($min       == '') $min = $max - $hysteresis;
+  if ($min       == '') $min = $max - Config::$hysteresis;
   if ($max       == '') {$max = null; $min = null;}
 
   if ($from_date == '') {$from_date = null; $to_date = null;}

@@ -90,14 +90,15 @@
       {
         if (!in_array($sensor->sensor, Params::$sensors) && !in_array($sensor->sensor, $visibleSensorArray)) continue;
         print '<label for="checkbox-'. $sensor->sensor. '">'. $sensor->comment. '</label>';
-        print '<input type="checkbox" name="sensor[]" id="checkbox-'. $sensor->sensor. '" value="'. $sensor->sensor. '" onchange="$(\'#form\').submit()" ';
+        print '<input type="checkbox" class="ticker" name="sensor[]" id="checkbox-'. $sensor->sensor. '" value="'. $sensor->sensor. '" onchange="$(\'#form\').submit()" ';
           if (in_array($sensor->sensor, Params::$sensors)) print 'checked="checked" ';
         print '/>&nbsp;';
       }
-    print '</div>';
-   
+      print '<button class="ui-button ui-widget ui-corner-all" onclick="$(\'.ticker\').removeAttr(\'checked\');" >✖</button> ';
+      print '<button class="ui-button ui-widget ui-corner-all" onclick="$(\'.ticker\').prop(\'checked\',true);" >✔</button>';
+    print '</div>';   
     //Calendar
-    print '<div class="floatleft">';
+    print '<div class="floatright">';
       print '<span class="master">Datum:</span>'; 
       print '<button onclick="$(\'#datepicker\').val(\''. Params::$date_czech_prev. '\')"  
               class="ui-button ui-widget ui-corner-all">❰❰ Předchozí den</button>&nbsp;';
