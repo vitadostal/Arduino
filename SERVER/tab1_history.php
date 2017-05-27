@@ -49,6 +49,7 @@
       $tabs = '';
       $h = null;
       $lastTimestamp = null;
+      $inlineCount = 0;
 
       //Loop all measures
       foreach($measureSet as $measure)
@@ -66,14 +67,22 @@
         }
 
         if ($lastTimestamp == $measure->timestamp)
-        {
+        {          
           //Not first hardware
+          $inlineCount++;
+          if ($inlineCount >= 4)
+          {
+            $out .= '</tr><tr><td></td>';
+            $inlineCount = 1;
+          }
+          
           $out .= '<td class="right">'. $measure->value1. ' <span style="color: rgba('. Utils::hex2rgb($sensor->color, 1). ')">'. $classSet[$measure->class]->unit. '</span></td>';
           $out .= '<td class="left darker">'. $classSet[$measure->class]->hardware. '</td>';  
         }
         else
         {
           //First hardware
+          $inlineCount = 0;
           if ($lastTimestamp != null) print '</tr>';
           $lastTimestamp = $measure->timestamp;
                 

@@ -23,8 +23,8 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.15 / 9 May 2017" ;     //Firmware version
-const int    offset          = 360;                       //EEPROM memory offset
+const String firmware        = "v1.16 / 27 May 2017";     //Firmware version
+const int    offset          = 340;                       //EEPROM memory offset
 
       byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
 const int    pause           = 250;                       //Next measure on error (in milliseconds)
@@ -32,7 +32,8 @@ const int    attempts        = 12;                        //Number of tries
 const int    screen_cycle    = 3;                         //Switching sensors on display screen (in seconds)
 
 const char*  update_path     = "/firmware";               //Firmware update path
-      String outside_path    = "<from-eeprom>";           //Outside temperature path
+      String sleepmode_path  = "/fetch/wakeup.txt";       //Sleep mode deactivation path
+      String outside_path    = "/fetch/outside.php";      //Outside temperature path
       String update_username = "<from-eeprom>";           //Firmware update login
       String update_password = "<from-eeprom>";           //Firmware update password
 
@@ -55,7 +56,10 @@ const char*  update_path     = "/firmware";               //Firmware update path
    byte BME_SCL            = 5;                           //BME580 sCLOCK
 #define DISPLAY_ADDRESS      0x3c                         //SSD1306 128x64 I2C address
 #define BME_ADDRESS          0x76                         //BME580 I2C address
+
+#define REBOOT_TIME          5                            //Number of seconds needed on reboot
 #define SENSORS              12                           //Total number of sensors below plus one
+#define REMOVE_SLEEP         false                        //Disable sleep mode
 
 //Counter                        1           2           3           4      5      6         7         8         9          10         11
 String mem_desc[SENSORS] = {"", "DALLAS 1", "DALLAS 2", "DALLAS 3", "DHT", "DHT", "BME280", "BME280", "BME280", "OUTSIDE", "OUTSIDE", "OUTSIDE"};
@@ -84,10 +88,12 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
   return i;
 }
 
-void setup() {    
-
+void setup() {
   //Read memory
   readMemory();
+
+  //Remove deep sleep
+  if (REMOVE_SLEEP) if (sleepMode) writeMemory(511,0); 
 
   //Init serial line
   if ((!displayUsed || DISPLAY_SDA != 1) && serialUsed && bmePins != 2)
@@ -118,7 +124,7 @@ void setup() {
 
   //Init Dallas
   if (dallasUsed) dallas.begin();
-  if (displayUsed) drawProgressBar(20);  
+  if (displayUsed) drawProgressBar(20);
 
   //Init DHT
   if (dhtUsed)
@@ -133,7 +139,7 @@ void setup() {
 
   //Info memory
   infoMemory();
-  if (displayUsed) drawProgressBar(40);  
+  if (displayUsed) drawProgressBar(40);
   
   //Hostname
   host = host_prefix + sensor;
@@ -145,12 +151,21 @@ void setup() {
   Serial.println("Starting WiFi manager...");
   if (displayUsed) drawWiFi();
   setupWifi();
-  if (displayUsed) drawProgressBar(60);  
+  if (displayUsed) drawProgressBar(60);
+
+  //Power saving mode
+  if (sleepMode)
+  {
+    takeReading(0);
+    checkSleepModeValidity();
+    Serial.println("Sweet dreams...");
+    ESP.deepSleep(((interval * 60) - REBOOT_TIME) * 1000000);
+  }
 
   //Server
   Serial.println("Starting WebServer...");
   setupWebServer();
-  if (displayUsed) drawProgressBar(70);  
+  if (displayUsed) drawProgressBar(70);
 
   //Scheduler
   ts.add(1, interval * 60 * 1000, takeReading, 0, false);
@@ -206,6 +221,7 @@ void readMemory()
 {
   struct config
   {
+    char  sleepModePath[20];
     char  sensor[20];
     char  key[20];           
     char  adminLogin[20];
@@ -228,6 +244,7 @@ void readMemory()
   
   EEPROM.begin(512);
   EEPROM_readAnything(offset, memory);
+  if (sleepmode_path  == "<from-eeprom>") sleepmode_path  = memory.sleepModePath;
   if (sensor          == "<from-eeprom>") sensor          = memory.sensor;
   if (key             == "<from-eeprom>") key             = memory.key;
   if (update_username == "<from-eeprom>") update_username = memory.adminLogin;
@@ -258,6 +275,7 @@ void readMemory()
   if (reporting       == 255)             reporting       = true;
   if (interval        == 255)             interval        = 1;
   if (sleepMode       == 255)             sleepMode       = false;
+  if (sleepmode_path  == "")              sleepmode_path  = "/fetch/wakeup.txt";
 }
 
 void setupWifi()
@@ -304,11 +322,14 @@ void setupWebServer()
   httpServer.on("/reporting-off", HTTP_GET, []() {writeMemory(509,0);});  
 
   httpServer.on("/interval-1",    HTTP_GET, []() {writeMemory(510,1);});
+  httpServer.on("/interval-3",    HTTP_GET, []() {writeMemory(510,3);});
   httpServer.on("/interval-5",    HTTP_GET, []() {writeMemory(510,5);});
   httpServer.on("/interval-10",   HTTP_GET, []() {writeMemory(510,10);});
   httpServer.on("/interval-15",   HTTP_GET, []() {writeMemory(510,15);});
   httpServer.on("/interval-30",   HTTP_GET, []() {writeMemory(510,30);});
   httpServer.on("/interval-60",   HTTP_GET, []() {writeMemory(510,60);});
+
+  httpServer.on("/sleep",         HTTP_GET, []() {writeMemory(511,1);});
   
   httpServer.begin();
   MDNS.addService("http", "tcp", 80);
@@ -334,8 +355,8 @@ void drawValues()
   String out, out_top;
   char out_char[10];  
   
-  int i = 1;
-  while (isnan(mem_val[mem]))
+  int i = 0;
+  while (isnan(mem_val[mem]) || mem_disp[mem] == false)
   {
     mem++;
     if (mem == SENSORS) mem = 1;
@@ -420,7 +441,7 @@ void readSensors(float &t1, float &t2, float &t3, float &t, float &h, float &tb,
   mem_val[9] = to;
   mem_val[10] = ho;
   mem_val[11] = po;
-  if (displayUsed) drawValues();
+  if (displayUsed && !sleepMode) drawValues();
 }
 
 void updateExecutionTime(void* context)
@@ -562,11 +583,13 @@ String deviceStatus() {
                else info += ("<li><b>Reporting:</b> "+off+" [<a href='reporting-on'>turn on</a>]</li>");  
                     info += ("<li><b>Interval:</b> "+na+ String(interval) + " minute(s)</span>");
   if (interval !=  1) info += (" [<a href='interval-1'>1 min</a>]");
+  if (interval !=  3) info += (" [<a href='interval-3'>3 min</a>]");
   if (interval !=  5) info += (" [<a href='interval-5'>5 min</a>]");
   if (interval != 10) info += (" [<a href='interval-10'>10 min</a>]");
   if (interval != 15) info += (" [<a href='interval-15'>¼ h</a>]");
   if (interval != 30) info += (" [<a href='interval-30'>½ h</a>]");
   if (interval != 60) info += (" [<a href='interval-60'>1 h</a>]");
+                    info += (" [<a href='sleep'>sleep</a>]");
                     info += ("</li>");
   info += ("</ul>");
 
@@ -697,7 +720,7 @@ void readOutside(float &t, float &h, float &p)
   //Pressure
   p = line.toFloat();
 
-  Serial.println("Outside | Received data: " + String(t) + "°C " + String(h) + "% " + String(p) + "Pa");
+  Serial.println("Outside | Received data: " + String(t) + "°C " + String(h) + "% " + String(p) + "hPa");
 }
 
 float roundTenth(float t)
@@ -743,4 +766,38 @@ String HTMLHeader()
   html += "<style>html{font-family: sans-serif}</style></head>";
   html += "<body><h1>ESP8266 device</h1>";
   return html;
+}
+
+void checkSleepModeValidity()
+{
+  String line, oldline, part;
+  
+  WiFiClient client;
+  if (client.connect(server, 80))
+  {
+    //GET request
+    client.println("GET " + String(sleepmode_path) + " HTTP/1.1");
+    client.println("Host: " + String(server));
+    client.println("User-Agent: ArduinoWiFi/1.1");
+    client.println("Connection: close");
+    client.println();
+
+    //Use response
+    delay(100);
+    while(client.available())
+    {
+      line = client.readStringUntil('\r');
+    }
+  }
+  client.stop();
+  line.remove(0, 1);
+ 
+  do
+  {
+    part = line.substring(0, line.indexOf(";"));
+    if (part.equals(sensor)) {Serial.println("Wake up!"); writeMemory(511,0);}
+    oldline = line;
+    line = line.substring(line.indexOf(";")+1);
+  }
+  while (oldline != line);
 }

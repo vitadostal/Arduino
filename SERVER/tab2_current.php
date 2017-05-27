@@ -25,7 +25,8 @@
     print '<table class="default">';
     $lastTimestamp = null;
     $lastSensor = null;
-    $count = 0;   
+    $count = 0;
+    $inlineCount = 0;   
 
     foreach($measureSet as $measure)
     {
@@ -36,11 +37,19 @@
       
       if ($lastTimestamp == $measure->timestamp && $lastSensor == $measure->sensor)
       {
+        $inlineCount++;
+        if ($inlineCount >= 4)
+        {
+          print '</tr><tr><td></td><td></td><td></td>';
+          $inlineCount = 1;
+        }
+        
         print '<td class="right">'. $measure->value1. ' <span style="color: rgba('. Utils::hex2rgb($measure->sensor->color, 1). ')">'. $measure->class->unit. '</span></td>';
         print '<td class="left darker">'. $measure->class->hardware. '</td>';      
       }
       else
       {
+        $inlineCount = 0;
         if ($count >= 20) break;
         if ($lastSensor != null) print '</tr>';
         $lastTimestamp = $measure->timestamp;
