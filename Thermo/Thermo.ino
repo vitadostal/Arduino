@@ -23,7 +23,7 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.16 / 27 May 2017";     //Firmware version
+const String firmware        = "v1.17 / 26 Jul 2017";     //Firmware version
 const int    offset          = 340;                       //EEPROM memory offset
 
       byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
@@ -490,17 +490,17 @@ void takeReading(void* context)
 
     //POST request
     String request;
-    request += "POST /script/measure_add.php HTTP/1.1\n";
-    request += "Host: " + String(server) + "\n";
-    request += "User-Agent: ArduinoWiFi/1.1\n";
-    request += "Connection: close\n";
-    request += "Content-Type: application/x-www-form-urlencoded\n";
+    request += "POST /script/measure_add.php HTTP/1.1\r\n";
+    request += "Host: " + String(server) + "\r\n";
+    request += "User-Agent: ArduinoWiFi" + sensor + "/1.1\r\n";
+    request += "Connection: close\r\n";
+    request += "Content-Type: application/x-www-form-urlencoded\r\n";
     request += "Content-Length: ";
-    request += (params.length() + 2);
-    request += "\n\n";
+    request += (params.length() + 4);
+    request += "\r\n\r\n";
     request += params;
     request += "\r\n\r\n";
-    client.println(request);
+    client.print(request);
     Serial.println("Data sent");
   }
   client.stop();
