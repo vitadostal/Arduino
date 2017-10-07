@@ -1,37 +1,47 @@
 //Railtour GPS data gatherer
 //Vitezslav Dostal | started 10.06.2017
 #include <SoftwareSerial.h>
+#include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <WiFiManager.h>
 //-----------------------------------------------------------
-const byte rxPin = 5;
-const byte txPin = 4;
-const byte speakPin = 12;
-const byte resetPin = 12;
-const byte powerPin = 14;
+const byte rxPin     =  5;   //GPS module serial line
+const byte txPin     =  4;   //GPS module serial line
+const byte resetPin  = 12;   //GPS module UCC
+const byte powerPin  = 14;   //GPS module power on pin
+const byte setupPin  = 13;   //Enable WiFi and download configuration
 
-int interval_fast = 5;  //number of second, read GPS
-int interval_slow = 30; //number of second, read GPS
-int interval      = 10; //number of minutes, wake up from sleep after success
-int fail_interval = 3;  //number of minutes, wake up from sleep after failure
-int suc_attempt   = 10; //measure taken into account
-int last_attempt  = 60; //number of seconds allowed after first reading
-int sat_enough    = 5;  //number of satellites which is considered fine
-int maxOperatingTime = 5;
+const byte test   = false;   //use predefined GPS value, skip GPS module
+
+int interval_fast    =  5;   //number of second, read GPS
+int interval_slow    = 30;   //number of second, read GPS
+int succ_interval    = 10;   //number of minutes, wake up from sleep after success
+int fail_interval    =  2;   //number of minutes, wake up from sleep after failure
+int succ_attempt     = 10;   //measure taken into account
+int last_attempt     = 60;   //number of seconds allowed after first reading
+int sat_enough       =  5;   //number of satellites which is considered fine
+int maxOperatingTime =  5;   //number of minutes when device is automatically turned off
+
+      String sensor          = "<from-eeprom>";           //Sensor indentification
+const char*  server          = "arduino.vitadostal.cz";   //Processing server
+      String key             = "<from-eeprom>";           //API write key
+const String firmware        = "v1.01 / 2 Oct 2017";      //Firmware version
+      byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
+const char*  update_path     = "/firmware";               //Firmware update path
+      String sleepmode_path  = "/fetch/railgps.txt";      //Settings path
+      String update_username = "admin";                   //Firmware update login
+      String update_password = "admin";                   //Firmware update password
 
 unsigned long operatingTime;
 unsigned long foundTime;
 
 bool fast = true;
+bool set = false;
 byte found = 0;
 char end_c[2];
 
 float lat, lng;
 int sat;
-
-const char* key    = "<key>";
-const char* sensor = "<sensor>";
-const char* server = "arduino.vitadostal.cz";
 
 SoftwareSerial gpsSerial (rxPin, txPin);
 String parts[20];
@@ -45,11 +55,16 @@ void setup()
   end_c[0] = 0x1a;
   end_c[1] = '\0';
 
-  pinMode(resetPin, OUTPUT); digitalWrite(resetPin, HIGH);
-  pinMode(powerPin, OUTPUT); digitalWrite(powerPin, LOW);
-
-  //setupWifi();
   startSerials();
+  readMemory();
+  startLogo();
+
+  pinMode(resetPin, OUTPUT); digitalWrite(resetPin, LOW);
+  pinMode(powerPin, OUTPUT); digitalWrite(powerPin, LOW);
+  
+  pinMode(setupPin, INPUT);
+  if (digitalRead(setupPin) == LOW) processSetup();
+  
   powerOnGPS();
 
   waitForGPS();
@@ -68,7 +83,18 @@ void startSerials()
 {
   Serial.begin(9600);
   gpsSerial.begin(9600);
+}
 
+void startLogo()
+{
+  Serial.println();
+  Serial.println();
+  Serial.println();
+  Serial.println("     /----  /---\\  /---- ");
+  Serial.println("     |      |   |  |      AiThinker A7 GSM/GPRS/GPS Module");
+  Serial.println("===  | --\\  |---/  \\---\\  ================================  ===");
+  Serial.println("     |   |  |          |  RailGPS " + firmware);
+  Serial.println("     \\---/  |      ----/  " + sensor + " interval " + interval + " min");
   Serial.println();
 }
 
@@ -83,10 +109,17 @@ void powerOnGPS()
 
 void powerOffGPS()
 {
-  //processCommand("AT+CPOF", "OK", 3, 1);
   Serial.println("Powering off A7 GPS...");
-  digitalWrite(resetPin, LOW);
+  //processCommand("AT+CPOF", "OK", 3, 1);
+  pinMode(resetPin, INPUT_PULLUP);
+  //pinMode(resetPin, INPUT);
+  //digitalWrite(resetPin, LOW);
   Serial.println("Powered off.");
+}
+
+void deepSleep(int mins)
+{
+  ESP.deepSleep((mins * 60) * 1000000);
 }
 
 void waitForGPS()
@@ -156,12 +189,22 @@ void testValidity(String answer)
 {
   int begin, end;
   String satelliteCount;
-  String txt;      
+  String txt;
+
+  //Send prepared data
+  if (test)
+  {
+    terminateGPS();
+    postData(49.29547, 17.40901, -1);
+    powerOffGPS();
+    deepSleep(succ_interval);
+  }  
 
   if (millis() >= operatingTime + maxOperatingTime * 60 * 1000)
   {
+    terminateGPS();    
     powerOffGPS();
-    ESP.deepSleep((fail_interval * 60) * 1000000);
+    deepSleep(fail_interval);
   } 
 
   begin = answer.indexOf("+GPSRD:$GPGGA");
@@ -180,10 +223,7 @@ void testValidity(String answer)
   {
     end = answer.indexOf("*", begin);
     if (end != -1)
-    {
-      //Test
-      //postData(49.29547, 17.40901);
-      
+    {      
       int latD, lngD;
       float latM, lngM;
 
@@ -221,18 +261,13 @@ void testValidity(String answer)
 
         //if (fast) initGPS(interval_slow);
         //fast = false;
-
-        //tone(speakPin, 1760, 200);
-        //delay(200);
-        //noTone(speakPin);
                 
-        if (found >= suc_attempt || satelliteCount.toInt() >= sat_enough)
+        if (found >= succ_attempt || satelliteCount.toInt() >= sat_enough)
         {
           terminateGPS();
           postData(lat, lng, sat);
-
           powerOffGPS();
-          ESP.deepSleep((interval * last_attempt) * 1000000);
+          deepSleep(succ_interval);
         }
       }
     }
@@ -242,9 +277,8 @@ void testValidity(String answer)
   {
     terminateGPS();
     postData(lat, lng, sat);
-
     powerOffGPS();
-    ESP.deepSleep((interval * 60) * 1000000);          
+    deepSleep(succ_interval);
   }  
 }
 
@@ -293,7 +327,7 @@ void setupWifi()
 {
   WiFiManager wifiManager;
   wifiManager.setTimeout(300);
-  wifiManager.autoConnect("ESP8266 Settings");
+  wifiManager.autoConnect("RailGPS Access");
 }
 
 void postDataWifi(float lat, float lng, int sat)
@@ -369,7 +403,7 @@ void postData(float lat, float lng, int sat)
     gpsSerial.println(end_c);
   
     processCommand("", "OK", 5, 1);
-    processCommand("AT+CIPCLOSE", "OK", 3, 1);
+    //processCommand("AT+CIPCLOSE", "OK", 3, 1);
   }
 }
 
@@ -403,4 +437,160 @@ float roundFloat(float t, int pwr)
   int i = round (t * pow(10, pwr));
   t = i / pow(10.0, pwr);
   return t;
+}
+
+template <class T> int EEPROM_readAnything(int ee, T& value)
+{
+  byte* p = (byte*)(void*)&value;
+  unsigned int i;
+  for (i = 0; i < sizeof(value); i++)
+    *p++ = EEPROM.read(ee++);
+  return i;
+}
+
+template <class T> int EEPROM_writeAnything(int ee, const T& value)
+{
+   const byte* p = (const byte*)(const void*)&value;
+   int i;
+   for (i = 0; i < sizeof(value); i++)
+       EEPROM.write(ee++, *p++);
+   return i;
+}
+
+void readMemory()
+{
+  struct config
+  {
+    char  sleepModePath[20];
+    char  sensor[20];
+    char  key[20];           
+    char  adminLogin[20];
+    char  adminPasswd[20];
+    char  wifiLogin[20];
+    char  wifiPasswd[20];
+    char  serialUsed;
+    char  displayUsed;
+    char  dallasUsed;
+    char  dhtUsed;
+    char  dhtType;
+    char  bmeUsed;
+    char  outsideUsed;
+    char  outsidePath[20];
+    char  bmePins;
+    char  reporting;
+    char  interval;
+    char  sleepMode;
+  } memory; 
+  
+  EEPROM.begin(512);
+  EEPROM_readAnything(340, memory);
+  if (sleepmode_path  == "<from-eeprom>") sleepmode_path  = memory.sleepModePath;
+  if (sensor          == "<from-eeprom>") sensor          = memory.sensor;
+  if (key             == "<from-eeprom>") key             = memory.key;
+  if (update_username == "<from-eeprom>") update_username = memory.adminLogin;
+  if (update_password == "<from-eeprom>") update_password = memory.adminPasswd;  
+  if (interval        == 255)             interval        = byte(memory.interval);
+}
+
+void writeMemory(String sensor, String key, byte interval)
+{
+  struct config
+  {
+    char  sensor[20];
+    char  key[20];           
+  } memory;
+
+  sensor.toCharArray(memory.sensor, 20);
+  sensor.toCharArray(memory.key, 20);
+  EEPROM_writeAnything(360, memory);  
+  EEPROM.write(510 - 1, interval);
+  EEPROM.commit();
+  set = true;  
+}
+
+String mac2String(byte ar[]) {
+  String s;
+  for (byte i = 0; i < 6; ++i)
+  {
+    char buf[3];
+    sprintf(buf, "%2X", ar[i]);
+    s += buf;
+    if (i < 5) s += ':';
+  }
+  return s;
+}
+
+void processSetup()
+{ 
+  Serial.println("Entering setup mode...");
+  setupWifi();
+  
+  byte mac[6];
+  String macAdr;
+  macAdr = mac2String(WiFi.macAddress(mac));
+  
+  Serial.println();
+  Serial.println("WiFi connected.");
+  Serial.println("WiFi network (SSID): " + WiFi.SSID());
+  Serial.println("MAC address: " + macAdr);
+
+  downloadConfig(macAdr);
+
+  //Signalize successful write to EEPROM
+  if (set)
+  {
+    Serial.println();
+    Serial.println("Signalizing success by powering on GPS module...");
+    powerOnGPS();
+  }
+
+  //Sleep forever = 1 day
+  Serial.println();
+  Serial.println("Sweet dreams!");
+  ESP.deepSleep((24 * 60 * 60) * 1000000);
+}
+
+void downloadConfig(String macAdr)
+{
+  String line, oldline, part;
+  
+  WiFiClient client;
+  if (client.connect(server, 80))
+  {
+    //GET request
+    client.println("GET " + String(sleepmode_path) + " HTTP/1.1");
+    client.println("Host: " + String(server));
+    client.println("User-Agent: ArduinoWiFi/1.1");
+    client.println("Connection: close");
+    client.println();
+
+    //Use response
+    delay(100);
+    while(client.available())
+    {
+      line = client.readStringUntil('\r');
+    }
+  }
+  client.stop();
+  
+  line.remove(0, 1);
+
+  do
+  {
+    part = line.substring(0, line.indexOf(";"));
+    if (part.equals(macAdr))
+    {
+      line = line.substring(line.indexOf(";")+1);
+      sensor = line.substring(0, line.indexOf(";"));
+      
+      line = line.substring(line.indexOf(";")+1);
+      interval = line.substring(0, line.indexOf(";")).toInt();
+
+      writeMemory(sensor, key, interval);
+      return;  
+    }
+    oldline = line;
+    line = line.substring(line.indexOf(";")+1);
+  }
+  while (oldline != line);
 }
