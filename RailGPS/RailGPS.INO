@@ -4,12 +4,15 @@
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <WiFiManager.h>
+#include "SSD1306Brzo.h"
 //-----------------------------------------------------------
 const byte rxPin     =  5;   //GPS module serial line
 const byte txPin     =  4;   //GPS module serial line
 const byte resetPin  = 12;   //GPS module UCC
 const byte powerPin  = 14;   //GPS module power on pin
 const byte setupPin  = 13;   //Enable WiFi and download configuration
+const byte dispData  =  0;   //SSD1306 sDATA
+const byte dispClock =  2;   //SSD1306 sCLOCK
 
 const byte test   = false;   //use predefined GPS value, skip GPS module
 
@@ -25,7 +28,7 @@ int maxOperatingTime =  5;   //number of minutes when device is automatically tu
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.01 / 2 Oct 2017";      //Firmware version
+const String firmware        = "v1.02 / 7 Oct 2017";      //Firmware version
       byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
 const char*  update_path     = "/firmware";               //Firmware update path
       String sleepmode_path  = "/fetch/railgps.txt";      //Settings path
@@ -42,10 +45,12 @@ char end_c[2];
 
 float lat, lng;
 int sat;
+String parts[20];
+String dispBuffer[7] = {"", "", "", "", "", "", ""};
+unsigned long lastTime;
 
 SoftwareSerial gpsSerial (rxPin, txPin);
-String parts[20];
-unsigned long lastTime;
+SSD1306Brzo display(0x3c, dispData, dispClock);
 
 //-----------------------------------------------------------
 void setup()
@@ -54,6 +59,9 @@ void setup()
   
   end_c[0] = 0x1a;
   end_c[1] = '\0';
+
+  display.init();
+  display.flipScreenVertically();
 
   startSerials();
   readMemory();
@@ -96,29 +104,36 @@ void startLogo()
   Serial.println("     |   |  |          |  RailGPS " + firmware);
   Serial.println("     \\---/  |      ----/  " + sensor + " interval " + interval + " min");
   Serial.println();
+  displayMessage("RailGPS " + firmware); 
+  displayMessage(sensor + " interval " + interval + " min");
 }
 
 void powerOnGPS()
 {
   Serial.println("Powering on A7 GPS...");
+  displayMessage("Powering on A7 GPS...");
   digitalWrite(powerPin, HIGH);
   delay(3000);
   digitalWrite(powerPin, LOW);
   Serial.println("Powered on.");
+  displayMessage("Powered on.");  
 }
 
 void powerOffGPS()
 {
   Serial.println("Powering off A7 GPS...");
+  displayMessage("Powering off A7 GPS...");  
   //processCommand("AT+CPOF", "OK", 3, 1);
   pinMode(resetPin, INPUT_PULLUP);
   //pinMode(resetPin, INPUT);
   //digitalWrite(resetPin, LOW);
   Serial.println("Powered off.");
+  displayMessage("Powered off.");
 }
 
 void deepSleep(int mins)
 {
+  displayMessage("Deep sleep mode!");
   ESP.deepSleep((mins * 60) * 1000000);
 }
 
@@ -131,6 +146,7 @@ void initGPS(int sec)
 {
   processCommand("AT+GPS=1", "OK", 1000000, 1);  
   processCommand("AT+GPSRD=" + String(sec), "OK", 5, 1);
+  displayMessage("Polling GPS module...");
 }
 
 void terminateGPS()
@@ -255,6 +271,7 @@ void testValidity(String answer)
         Serial.print(" E     ");
         Serial.print (sat);
         Serial.println(" sat");
+        displayMessage("#" + String(found) + " " + String(lat) + "N " + String(lng) + "E " + String(sat) + "sat");
 
         Serial.println();
         foundTime = millis();
@@ -366,6 +383,8 @@ void postDataWifi(float lat, float lng, int sat)
 
 void postData(float lat, float lng, int sat)
 {
+  displayMessage("Connecting to internet...");
+  
   bool status;
   
               status = processCommand("AT+CGDCONT=1,\"IP\",\"internet\",\"0.0.0.0\",0,0", "OK", 5, 5);
@@ -404,6 +423,8 @@ void postData(float lat, float lng, int sat)
   
     processCommand("", "OK", 5, 1);
     //processCommand("AT+CIPCLOSE", "OK", 3, 1);
+
+    displayMessage("Packet sent.");
   }
 }
 
@@ -523,6 +544,7 @@ String mac2String(byte ar[]) {
 void processSetup()
 { 
   Serial.println("Entering setup mode...");
+  displayMessage("Entering setup mode...");
   setupWifi();
   
   byte mac[6];
@@ -532,7 +554,9 @@ void processSetup()
   Serial.println();
   Serial.println("WiFi connected.");
   Serial.println("WiFi network (SSID): " + WiFi.SSID());
+  displayMessage("WiFi network: " + WiFi.SSID());
   Serial.println("MAC address: " + macAdr);
+  displayMessage("MAC address: " + macAdr);
 
   downloadConfig(macAdr);
 
@@ -541,12 +565,14 @@ void processSetup()
   {
     Serial.println();
     Serial.println("Signalizing success by powering on GPS module...");
+    displayMessage("Download successful.");
     powerOnGPS();
   }
 
   //Sleep forever = 1 day
   Serial.println();
   Serial.println("Sweet dreams!");
+  displayMessage("Deep sleep mode!");
   ESP.deepSleep((24 * 60 * 60) * 1000000);
 }
 
@@ -593,4 +619,21 @@ void downloadConfig(String macAdr)
     line = line.substring(line.indexOf(";")+1);
   }
   while (oldline != line);
+}
+
+void displayMessage(String text)
+{
+  for (int i = 0; i < 6; i++) dispBuffer[i] = dispBuffer[i+1];  
+  dispBuffer[6] = text;
+  display.clear();
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(0,  0, dispBuffer[0]);
+  display.drawString(0,  9, dispBuffer[1]);
+  display.drawString(0, 18, dispBuffer[2]);
+  display.drawString(0, 27, dispBuffer[3]);
+  display.drawString(0, 36, dispBuffer[4]);
+  display.drawString(0, 45, dispBuffer[5]);
+  display.drawString(0, 54, dispBuffer[6]);
+  display.display();
 }
