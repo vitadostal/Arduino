@@ -18,7 +18,6 @@ const byte test   = false;   //use predefined GPS value, skip GPS module
 
 int interval_fast    =  5;   //number of second, read GPS
 int interval_slow    = 30;   //number of second, read GPS
-int succ_interval    = 10;   //number of minutes, wake up from sleep after success
 int fail_interval    =  2;   //number of minutes, wake up from sleep after failure
 int succ_attempt     = 10;   //measure taken into account
 int last_attempt     = 60;   //number of seconds allowed after first reading
@@ -28,8 +27,10 @@ int maxOperatingTime =  5;   //number of minutes when device is automatically tu
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.02 / 7 Oct 2017";      //Firmware version
-      byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
+const String firmware        = "v1.03 14 Oct 2017";       //Firmware version
+      byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
+      byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
+      byte   succ_interval   = 255; //255 = <from-eeprom> //Next measure (in minutes)
 const char*  update_path     = "/firmware";               //Firmware update path
       String sleepmode_path  = "/fetch/railgps.txt";      //Settings path
       String update_username = "admin";                   //Firmware update login
@@ -102,10 +103,10 @@ void startLogo()
   Serial.println("     |      |   |  |      AiThinker A7 GSM/GPRS/GPS Module");
   Serial.println("===  | --\\  |---/  \\---\\  ================================  ===");
   Serial.println("     |   |  |          |  RailGPS " + firmware);
-  Serial.println("     \\---/  |      ----/  " + sensor + " interval " + interval + " min");
+  Serial.println("     \\---/  |      ----/  " + sensor + " interval " + succ_interval + " min");
   Serial.println();
   displayMessage("RailGPS " + firmware); 
-  displayMessage(sensor + " interval " + interval + " min");
+  displayMessage(sensor + " interval " + succ_interval + " min");
 }
 
 void powerOnGPS()
@@ -282,7 +283,8 @@ void testValidity(String answer)
         if (found >= succ_attempt || satelliteCount.toInt() >= sat_enough)
         {
           terminateGPS();
-          postData(lat, lng, sat);
+          if (gsmReporting) postData(lat, lng, sat);
+          if (wifiReporting) postDataWifi(lat, lng, sat);
           powerOffGPS();
           deepSleep(succ_interval);
         }
@@ -293,7 +295,8 @@ void testValidity(String answer)
   if (found >= 1 && (millis() >= foundTime + 60 * 1000))
   {
     terminateGPS();
-    postData(lat, lng, sat);
+    if (gsmReporting) postData(lat, lng, sat);
+    if (wifiReporting) postDataWifi(lat, lng, sat);
     powerOffGPS();
     deepSleep(succ_interval);
   }  
@@ -349,12 +352,15 @@ void setupWifi()
 
 void postDataWifi(float lat, float lng, int sat)
 {
-  //Push data to server
+  displayMessage("Connecting to Wifi...");
+  setupWifi();
+  displayMessage("WiFi network: " + WiFi.SSID());
+
   Serial.println("Connecting to server " + String(server) + "...");
   WiFiClient client;
   if (client.connect(server, 80))
   {
-    Serial.println("Server connected");
+    Serial.println("Server connected.");
 
     String params;
     params += "key=" + String(key);
@@ -365,20 +371,22 @@ void postDataWifi(float lat, float lng, int sat)
 
     //POST request
     String request;
-    request += "POST /script/measure_add.php HTTP/1.1\n";
-    request += "Host: " + String(server) + "\n";
-    request += "User-Agent: ArduinoWiFi/1.1\n";
-    request += "Connection: close\n";
-    request += "Content-Type: application/x-www-form-urlencoded\n";
+    request += "POST /script/measure_add.php HTTP/1.1\r\n";
+    request += "Host: " + String(server) + "\r\n";
+    request += "User-Agent: ArduinoWiFi" + sensor + "/1.1\r\n";
+    request += "Connection: close\r\n";
+    request += "Content-Type: application/x-www-form-urlencoded\r\n";
     request += "Content-Length: ";
-    request += (params.length() + 2);
-    request += "\n\n";
+    request += (params.length() + 4);
+    request += "\r\n\r\n";
     request += params;
     request += "\r\n\r\n";
     client.println(request);
-    Serial.println("Data sent");
+    Serial.println("Data sent.");
   }
   client.stop();
+
+  displayMessage("Packet sent over WiFi.");
 }
 
 void postData(float lat, float lng, int sat)
@@ -424,7 +432,7 @@ void postData(float lat, float lng, int sat)
     processCommand("", "OK", 5, 1);
     //processCommand("AT+CIPCLOSE", "OK", 3, 1);
 
-    displayMessage("Packet sent.");
+    displayMessage("Packet sent over GSM.");
   }
 }
 
@@ -497,9 +505,9 @@ void readMemory()
     char  bmeUsed;
     char  outsideUsed;
     char  outsidePath[20];
-    char  bmePins;
-    char  reporting;
-    char  interval;
+    char  wifiReporting;
+    char  gsmReporting;
+    char  succ_interval;
     char  sleepMode;
   } memory; 
   
@@ -510,10 +518,12 @@ void readMemory()
   if (key             == "<from-eeprom>") key             = memory.key;
   if (update_username == "<from-eeprom>") update_username = memory.adminLogin;
   if (update_password == "<from-eeprom>") update_password = memory.adminPasswd;  
-  if (interval        == 255)             interval        = byte(memory.interval);
+  if (wifiReporting   == 255)             wifiReporting   = byte(memory.wifiReporting);
+  if (gsmReporting    == 255)             gsmReporting    = byte(memory.gsmReporting);
+  if (succ_interval   == 255)             succ_interval   = byte(memory.succ_interval);
 }
 
-void writeMemory(String sensor, String key, byte interval)
+void writeMemory(String sensor, String key, byte succ_interval, byte gsmReporting, byte wifiReporting)
 {
   struct config
   {
@@ -524,7 +534,9 @@ void writeMemory(String sensor, String key, byte interval)
   sensor.toCharArray(memory.sensor, 20);
   sensor.toCharArray(memory.key, 20);
   EEPROM_writeAnything(360, memory);  
-  EEPROM.write(510 - 1, interval);
+  EEPROM.write(508 - 1, wifiReporting);
+  EEPROM.write(509 - 1, gsmReporting);
+  EEPROM.write(510 - 1, succ_interval);
   EEPROM.commit();
   set = true;  
 }
@@ -610,9 +622,15 @@ void downloadConfig(String macAdr)
       sensor = line.substring(0, line.indexOf(";"));
       
       line = line.substring(line.indexOf(";")+1);
-      interval = line.substring(0, line.indexOf(";")).toInt();
+      succ_interval = line.substring(0, line.indexOf(";")).toInt();
 
-      writeMemory(sensor, key, interval);
+      line = line.substring(line.indexOf(";")+1);
+      gsmReporting = line.substring(0, line.indexOf(";")).toInt();
+
+      line = line.substring(line.indexOf(";")+1);
+      wifiReporting = line.substring(0, line.indexOf(";")).toInt();
+
+      writeMemory(sensor, key, succ_interval, gsmReporting, wifiReporting);
       return;  
     }
     oldline = line;
@@ -628,12 +646,11 @@ void displayMessage(String text)
   display.clear();
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.drawString(0,  0, dispBuffer[0]);
-  display.drawString(0,  9, dispBuffer[1]);
-  display.drawString(0, 18, dispBuffer[2]);
-  display.drawString(0, 27, dispBuffer[3]);
-  display.drawString(0, 36, dispBuffer[4]);
-  display.drawString(0, 45, dispBuffer[5]);
-  display.drawString(0, 54, dispBuffer[6]);
+  display.drawString(0,  0, dispBuffer[6]);
+  display.drawString(0, 16, dispBuffer[5]);
+  display.drawString(0, 25, dispBuffer[4]);
+  display.drawString(0, 34, dispBuffer[3]);
+  display.drawString(0, 43, dispBuffer[2]);
+  display.drawString(0, 52, dispBuffer[1]);
   display.display();
 }
