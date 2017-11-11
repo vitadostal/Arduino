@@ -23,7 +23,7 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.17 / 26 Jul 2017";     //Firmware version
+const String firmware        = "v1.18 / 11 Nov 2017";     //Firmware version
 const int    offset          = 340;                       //EEPROM memory offset
 
       byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
@@ -692,11 +692,9 @@ void readOutside(float &t, float &h, float &p)
     client.println();
 
     //Use response
-    delay(100);
-    while(client.available())
-    {
-      line = client.readStringUntil('\r');
-    }
+                     delay( 300); while(client.available()) {line = client.readStringUntil('\r');}
+    if (line == "") {delay( 700); while(client.available()) {line = client.readStringUntil('\r');}}
+    if (line == "") {delay(2000); while(client.available()) {line = client.readStringUntil('\r');}}
   }
   client.stop();
   
@@ -783,11 +781,9 @@ void checkSleepModeValidity()
     client.println();
 
     //Use response
-    delay(100);
-    while(client.available())
-    {
-      line = client.readStringUntil('\r');
-    }
+                     delay( 300); while(client.available()) {line = client.readStringUntil('\r');}
+    if (line == "") {delay( 700); while(client.available()) {line = client.readStringUntil('\r');}}
+    if (line == "") {delay(2000); while(client.available()) {line = client.readStringUntil('\r');}}
   }
   client.stop();
   line.remove(0, 1);
