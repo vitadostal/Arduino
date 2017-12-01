@@ -27,7 +27,7 @@ int maxOperatingTime =  5;   //number of minutes when device is automatically tu
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.03 14 Oct 2017";       //Firmware version
+const String firmware        = "v1.04 01 Dec 2017";       //Firmware version
       byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
       byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
       byte   succ_interval   = 255; //255 = <from-eeprom> //Next measure (in minutes)
@@ -532,7 +532,7 @@ void writeMemory(String sensor, String key, byte succ_interval, byte gsmReportin
   } memory;
 
   sensor.toCharArray(memory.sensor, 20);
-  sensor.toCharArray(memory.key, 20);
+  key.toCharArray(memory.key, 20);
   EEPROM_writeAnything(360, memory);  
   EEPROM.write(508 - 1, wifiReporting);
   EEPROM.write(509 - 1, gsmReporting);
