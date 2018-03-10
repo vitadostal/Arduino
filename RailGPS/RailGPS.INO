@@ -27,9 +27,10 @@ int maxOperatingTime =  5;   //number of minutes when device is automatically tu
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.04 01 Dec 2017";       //Firmware version
+const String firmware        = "v1.05 10 Mar 2018";       //Firmware version
       byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
       byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
+      byte   displayUsed     = 255; //255 = <from-eeprom> //Display support enabled
       byte   succ_interval   = 255; //255 = <from-eeprom> //Next measure (in minutes)
 const char*  update_path     = "/firmware";               //Firmware update path
       String sleepmode_path  = "/fetch/railgps.txt";      //Settings path
@@ -61,11 +62,12 @@ void setup()
   end_c[0] = 0x1a;
   end_c[1] = '\0';
 
-  display.init();
-  display.flipScreenVertically();
-
-  startSerials();
   readMemory();
+ 
+  if (displayUsed) display.init();
+  if (displayUsed) display.flipScreenVertically();
+  
+  startSerials();
   startLogo();
 
   pinMode(resetPin, OUTPUT); digitalWrite(resetPin, LOW);
@@ -520,6 +522,7 @@ void readMemory()
   if (update_password == "<from-eeprom>") update_password = memory.adminPasswd;  
   if (wifiReporting   == 255)             wifiReporting   = byte(memory.wifiReporting);
   if (gsmReporting    == 255)             gsmReporting    = byte(memory.gsmReporting);
+  if (displayUsed     == 255)             displayUsed     = byte(memory.displayUsed);
   if (succ_interval   == 255)             succ_interval   = byte(memory.succ_interval);
 }
 
@@ -550,6 +553,7 @@ String mac2String(byte ar[]) {
     s += buf;
     if (i < 5) s += ':';
   }
+  s.replace(' ', '0');
   return s;
 }
 
@@ -641,6 +645,7 @@ void downloadConfig(String macAdr)
 
 void displayMessage(String text)
 {
+  if (!displayUsed) return;
   for (int i = 0; i < 6; i++) dispBuffer[i] = dispBuffer[i+1];  
   dispBuffer[6] = text;
   display.clear();
