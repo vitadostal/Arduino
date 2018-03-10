@@ -27,7 +27,7 @@ int maxOperatingTime =  5;   //number of minutes when device is automatically tu
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.05 10 Mar 2018";       //Firmware version
+const String firmware        = "v1.06 10 Mar 2018";       //Firmware version
       byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
       byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
       byte   displayUsed     = 255; //255 = <from-eeprom> //Display support enabled
@@ -526,7 +526,7 @@ void readMemory()
   if (succ_interval   == 255)             succ_interval   = byte(memory.succ_interval);
 }
 
-void writeMemory(String sensor, String key, byte succ_interval, byte gsmReporting, byte wifiReporting)
+void writeMemory(String sensor, String key, byte succ_interval, byte gsmReporting, byte wifiReporting, byte displayUsed)
 {
   struct config
   {
@@ -537,6 +537,7 @@ void writeMemory(String sensor, String key, byte succ_interval, byte gsmReportin
   sensor.toCharArray(memory.sensor, 20);
   key.toCharArray(memory.key, 20);
   EEPROM_writeAnything(360, memory);  
+  EEPROM.write(482 - 1, displayUsed);
   EEPROM.write(508 - 1, wifiReporting);
   EEPROM.write(509 - 1, gsmReporting);
   EEPROM.write(510 - 1, succ_interval);
@@ -634,7 +635,10 @@ void downloadConfig(String macAdr)
       line = line.substring(line.indexOf(";")+1);
       wifiReporting = line.substring(0, line.indexOf(";")).toInt();
 
-      writeMemory(sensor, key, succ_interval, gsmReporting, wifiReporting);
+      line = line.substring(line.indexOf(";")+1);
+      displayUsed = line.substring(0, line.indexOf(";")).toInt();
+
+      writeMemory(sensor, key, succ_interval, gsmReporting, wifiReporting, displayUsed);
       return;  
     }
     oldline = line;
