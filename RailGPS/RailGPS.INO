@@ -22,12 +22,12 @@ int fail_interval    =  2;   //number of minutes, wake up from sleep after failu
 int succ_attempt     = 10;   //measure taken into account
 int last_attempt     = 60;   //number of seconds allowed after first reading
 int sat_enough       =  5;   //number of satellites which is considered fine
-int maxOperatingTime =  5;   //number of minutes when device is automatically turned off
+int maxOperatingTime =  4;   //number of minutes when device is automatically turned off
 
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.06 10 Mar 2018";       //Firmware version
+const String firmware        = "v1.07 11 Mar 2018";       //Firmware version
       byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
       byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
       byte   displayUsed     = 255; //255 = <from-eeprom> //Display support enabled
@@ -76,7 +76,7 @@ void setup()
   pinMode(setupPin, INPUT);
   if (digitalRead(setupPin) == LOW) processSetup();
   
-  powerOnGPS();
+  powerOnGPS(3);
 
   waitForGPS();
   //terminateGPS();
@@ -111,12 +111,12 @@ void startLogo()
   displayMessage(sensor + " interval " + succ_interval + " min");
 }
 
-void powerOnGPS()
+void powerOnGPS(int sec)
 {
   Serial.println("Powering on A7 GPS...");
   displayMessage("Powering on A7 GPS...");
   digitalWrite(powerPin, HIGH);
-  delay(3000);
+  delay(sec * 1000);
   digitalWrite(powerPin, LOW);
   Serial.println("Powered on.");
   displayMessage("Powered on.");  
@@ -572,8 +572,8 @@ void processSetup()
   Serial.println("WiFi connected.");
   Serial.println("WiFi network (SSID): " + WiFi.SSID());
   displayMessage("WiFi network: " + WiFi.SSID());
-  Serial.println("MAC address: " + macAdr);
-  displayMessage("MAC address: " + macAdr);
+  Serial.println("MAC: " + macAdr);
+  displayMessage("MAC: " + macAdr);
 
   downloadConfig(macAdr);
 
@@ -583,7 +583,24 @@ void processSetup()
     Serial.println();
     Serial.println("Signalizing success by powering on GPS module...");
     displayMessage("Download successful.");
-    powerOnGPS();
+    displayUsed = 0;
+
+    powerOnGPS(1);
+    delay(1000);
+    powerOffGPS;
+
+    powerOnGPS(1);
+    delay(1000);
+    powerOffGPS;
+
+    powerOnGPS(1);
+    delay(1000);
+    powerOffGPS;
+  }
+  else
+  {
+    displayMessage("Setup terminated.");
+    displayUsed = 0;
   }
 
   //Sleep forever = 1 day
