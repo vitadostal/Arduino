@@ -27,7 +27,7 @@ int maxOperatingTime =  4;   //number of minutes when device is automatically tu
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.07 11 Mar 2018";       //Firmware version
+const String firmware        = "v1.08 31 Mar 2018";       //Firmware version
       byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
       byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
       byte   displayUsed     = 255; //255 = <from-eeprom> //Display support enabled
@@ -363,6 +363,7 @@ void postDataWifi(float lat, float lng, int sat)
   if (client.connect(server, 80))
   {
     Serial.println("Server connected.");
+    displayMessage("Server connected.");
 
     String params;
     params += "key=" + String(key);
@@ -375,7 +376,7 @@ void postDataWifi(float lat, float lng, int sat)
     String request;
     request += "POST /script/measure_add.php HTTP/1.1\r\n";
     request += "Host: " + String(server) + "\r\n";
-    request += "User-Agent: ArduinoWiFi" + sensor + "/1.1\r\n";
+    request += "User-Agent: ArduinoWiFi/" + String(sensor) + "\r\n";
     request += "Connection: close\r\n";
     request += "Content-Type: application/x-www-form-urlencoded\r\n";
     request += "Content-Length: ";
@@ -407,6 +408,9 @@ void postData(float lat, float lng, int sat)
   
   if (status)
   {  
+    Serial.println("APN connected.");
+    displayMessage("APN connected.");
+    
     String params;
     params += "key=" + String(key);
     params += "&sensor=" + String(sensor);
@@ -562,29 +566,26 @@ void processSetup()
 { 
   Serial.println("Entering setup mode...");
   displayMessage("Entering setup mode...");
-  setupWifi();
   
   byte mac[6];
   String macAdr;
   macAdr = mac2String(WiFi.macAddress(mac));
-  
   Serial.println();
-  Serial.println("WiFi connected.");
-  Serial.println("WiFi network (SSID): " + WiFi.SSID());
-  displayMessage("WiFi network: " + WiFi.SSID());
   Serial.println("MAC: " + macAdr);
   displayMessage("MAC: " + macAdr);
 
-  downloadConfig(macAdr);
+  if (gsmReporting) processConfig(downloadConfig(), macAdr);
+  if (wifiReporting) processConfig(downloadConfigWiFi(), macAdr);
 
-  //Signalize successful write to EEPROM
   if (set)
   {
     Serial.println();
-    Serial.println("Signalizing success by powering on GPS module...");
+    Serial.println("Download successful.");
     displayMessage("Download successful.");
     displayUsed = 0;
+    powerOffGPS;    
 
+    //Signalize successful write to EEPROM by power LED blinking
     powerOnGPS(1);
     delay(1000);
     powerOffGPS;
@@ -599,6 +600,8 @@ void processSetup()
   }
   else
   {
+    Serial.println();
+    Serial.println("Setup terminated.");
     displayMessage("Setup terminated.");
     displayUsed = 0;
   }
@@ -610,17 +613,24 @@ void processSetup()
   ESP.deepSleep((24 * 60 * 60) * 1000000);
 }
 
-void downloadConfig(String macAdr)
+String downloadConfigWiFi()
 {
-  String line, oldline, part;
+  String line;
+
+  displayMessage("Connecting to Wifi...");
+  setupWifi();
+  displayMessage("WiFi network: " + WiFi.SSID());  
   
   WiFiClient client;
   if (client.connect(server, 80))
   {
+    Serial.println("Server connected.");
+    displayMessage("Server connected.");
+
     //GET request
     client.println("GET " + String(sleepmode_path) + " HTTP/1.1");
     client.println("Host: " + String(server));
-    client.println("User-Agent: ArduinoWiFi/1.1");
+    client.println("User-Agent: ArduinoWiFi/" + String(sensor));
     client.println("Connection: close");
     client.println();
 
@@ -632,6 +642,68 @@ void downloadConfig(String macAdr)
     }
   }
   client.stop();
+
+  Serial.println();
+  Serial.println("====received================");
+  Serial.println(line); 
+  return line;
+}
+
+String downloadConfig()
+{
+  String line;
+  bool status;
+  
+  powerOnGPS(3);
+  waitForGPS();
+  
+  displayMessage("Connecting to internet...");
+  
+              status = processCommand("AT+CGDCONT=1,\"IP\",\"internet\",\"0.0.0.0\",0,0", "OK", 5, 5);
+  if (status) status = processCommand("AT+CMEE=1", "OK", 5, 5);
+  if (status) status = processCommand("AT+CGATT=1", "OK", 5, 5);
+  if (status) status = processCommand("AT+CGACT=1,1", "OK", 5, 5);
+  if (status) status = processCommand("AT+CIPCLOSE", "", 1, 1);
+  if (status) status = processCommand("AT+CIPSTART=\"TCP\",\"" + String(server) + "\",80", "CONNECT OK", 5, 5);
+  if (status) status = processCommand("AT+CIPSEND", ">", 5, 5);
+  
+  if (status)
+  {
+    Serial.println("APN connected.");
+    displayMessage("APN connected.");
+     
+    //GET request
+    String request;
+    request += "GET " + String(sleepmode_path) + " HTTP/1.1\r\n";
+    request += "Host: " + String(server) + "\r\n";
+    request += "User-Agent: A7-GPRS/" + String(sensor) + "\r\n";
+    request += "Connection: close";
+    request += "\r\n\r\n";
+    gpsSerial.print(request);
+    gpsSerial.println(end_c);
+    gpsSerial.println(end_c);
+    gpsSerial.println(end_c);    
+    
+    //Use response
+    lastTime = millis();
+    while (millis() < lastTime + 10000) {
+      delay(1);
+      while (gpsSerial.available() >0) {
+        char c = gpsSerial.read();
+        line += c;
+      }
+    }    
+    
+    Serial.println();
+    Serial.println("====received================");
+    Serial.println(line);
+    return line;
+  }
+}
+  
+void processConfig(String line, String macAdr)
+{
+  String oldline, part;
   
   line.remove(0, 1);
 
