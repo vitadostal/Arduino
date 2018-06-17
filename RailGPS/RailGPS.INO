@@ -3,6 +3,8 @@
 #include <SoftwareSerial.h>
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266HTTPUpdateServer.h>
 #include <WiFiManager.h>
 #include <FS.h>
 #include "SSD1306Brzo.h"
@@ -29,13 +31,13 @@ int flashPortion   = 2000;   //size of flash memory transmitted
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.09 17 Jun 2018";       //Firmware version
+const String firmware        = "v1.10 17 Jun 2018";       //Firmware version
       byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
       byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
       byte   displayUsed     = 255; //255 = <from-eeprom> //Display support enabled
       byte   flashUsed       = 255; //255 = <from-eeprom> //Flash storage enabled
       byte   succ_interval   = 255; //255 = <from-eeprom> //Next measure (in minutes)
-const char*  update_path     = "/firmware";               //Firmware update path
+const char*  update_path     = "/";                       //Firmware update path
       String sleepmode_path  = "/fetch/railgps.txt";      //Settings path
       String update_username = "admin";                   //Firmware update login
       String update_password = "admin";                   //Firmware update password
@@ -433,7 +435,6 @@ void postData(float lat, float lng, int sat, String timex, String date)
   if (status) status = processCommand("AT+CMEE=1", "OK", 5, 5);
   if (status) status = processCommand("AT+CGATT=1", "OK", 5, 5);
   if (status) status = processCommand("AT+CGACT=1,1", "OK", 5, 5);
-  if (status) status = processCommand("AT+CIPCLOSE", "", 1, 1);
   if (status) status = processCommand("AT+CIPSTART=\"TCP\",\"" + String(server) + "\",80", "CONNECT OK", 5, 5);
   if (status) status = processCommand("AT+CIPSEND", ">", 5, 5);
 
@@ -475,8 +476,6 @@ void postData(float lat, float lng, int sat, String timex, String date)
     gpsSerial.println(end_c);
 
     processCommand("", "OK", 5, 1);
-    //processCommand("AT+CIPCLOSE", "OK", 3, 1);
-
     displayMessage("Packet sent over GSM.");
   }
 }
@@ -630,15 +629,15 @@ void processSetup()
   Serial.println("MAC: " + macAdr);
   displayMessage("MAC: " + macAdr);
 
-  if (flashUsed) prepareFlashFile();
   if (gsmReporting) processConfig(downloadConfig(), macAdr);
-  if (wifiReporting) processConfig(downloadConfigWiFi(), macAdr);
+  if (!set) processConfig(downloadConfigWiFi(), macAdr);
 
   if (set)
   {
     Serial.println();
     Serial.println("Download successful.");
     displayMessage("Download successful.");
+    if (flashUsed) prepareFlashFile();
     displayUsed = 0;
     powerOffGPS;
 
@@ -663,11 +662,16 @@ void processSetup()
     displayUsed = 0;
   }
 
-  //Sleep after configuration for 10 minutes
+  //Ready for OTA update
   Serial.println();
-  Serial.println("Sweet dreams!");
-  displayMessage("Deep sleep mode!");
-  ESP.deepSleep((10 * 60) * 1000000);
+  Serial.println("Firmware OTA ready.");
+  displayMessage("Firmware OTA ready.");
+  setupWifi();
+  ESP8266WebServer httpServer(80);
+  ESP8266HTTPUpdateServer httpUpdater;  
+  httpUpdater.setup(&httpServer, update_path);
+  httpServer.begin();
+  while (true) {httpServer.handleClient();};
 }
 
 String downloadConfigWiFi()
@@ -720,7 +724,6 @@ String downloadConfig()
   if (status) status = processCommand("AT+CMEE=1", "OK", 5, 5);
   if (status) status = processCommand("AT+CGATT=1", "OK", 5, 5);
   if (status) status = processCommand("AT+CGACT=1,1", "OK", 5, 5);
-  if (status) status = processCommand("AT+CIPCLOSE", "", 1, 1);
   if (status) status = processCommand("AT+CIPSTART=\"TCP\",\"" + String(server) + "\",80", "CONNECT OK", 5, 5);
   if (status) status = processCommand("AT+CIPSEND", ">", 5, 5);
 
