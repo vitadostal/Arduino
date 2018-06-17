@@ -86,6 +86,89 @@ class Measure
 		return $result;
 	}
   
+	public static function loadClassNews($db, $class, $sensor, $count)
+	{
+    $dataset = $db->getByCondition(
+      "measure",
+      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      "sensor='".$sensor."' AND class='".$class."'",
+      "timestamp DESC, sensor ASC, field ASC", $count);     
+
+		$result = array();
+		foreach($dataset as $row)
+		{
+			$object = new Measure();
+      $object->fromDataRow($row);
+      $result[$object->id] = $object;
+		}
+		return $result;
+	}
+  
+	public static function loadClassNewsLastMinutes($db, $class, $sensors, $minutes)
+	{
+    $minutes = mysqli_real_escape_string($db->conn, $minutes);
+    
+    $dataset = $db->getByCondition(
+      "measure",
+      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      "class='$class' AND timestamp > DATE_SUB(NOW(), INTERVAL $minutes MINUTE) AND ". Database::whereArray("sensor", $sensors),      
+      "timestamp DESC, sensor ASC, field ASC");     
+
+		$result = array();
+		foreach($dataset as $row)
+		{
+			$object = new Measure();
+      $object->fromDataRow($row);
+      $result[$object->id] = $object;
+		}
+		return $result;
+	}
+  
+	public static function loadClassNewsPeriod($db, $class, $sensors, $from, $to)
+	{
+    $from = mysqli_real_escape_string($db->conn, $from);
+    $to = mysqli_real_escape_string($db->conn, $to);
+
+    $dataset = $db->getByCondition(
+      "measure",
+      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      "class='$class' AND timestamp >= '$from' AND timestamp <= '$to' AND ". Database::whereArray("sensor", $sensors),      
+      "timestamp DESC, sensor ASC, field ASC");     
+
+		$result = array();
+		foreach($dataset as $row)
+		{
+			$object = new Measure();
+      $object->fromDataRow($row);
+      $result[$object->id] = $object;
+		}
+		return $result;
+	}
+  
+	public static function loadClassNewsLatest($db, $class, $sensors)
+	{
+    $whereArray = array();
+    foreach ($sensors as $sensor)
+    {
+      $whereArray[] = "class='$class' AND sensor='$sensor'";  
+    }
+    
+    $dataset = $db->getUnionByCondition(
+      "measure",
+      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      $whereArray,      
+      "timestamp DESC LIMIT 1");     
+
+		$result = array();
+		foreach($dataset as $row)
+		{
+			$object = new Measure();
+      $object->fromDataRow($row);
+      $result[$object->id] = $object;
+		}
+		return $result;
+	}  
+  
   public static function datasetGraph($db, $displays, $date, $group = 10)
   {
     $result = array();
@@ -135,14 +218,33 @@ class Measure
       "*", 
       "sensor='$sensor' AND class='$class'",
       "timestamp DESC",
-      "1" );
+      1
+    );
 
     if ($dataset != null)
       $object->fromDataRow($dataset[0]);
     else $object = null;
     
     return $object;
-  }  
+  }
+  
+  public static function loadClassHistory($db, $class, $sensors, $date)
+  {
+    $dataset = $db->getByCondition(
+      "measure",
+      "id, timestamp, HOUR(timestamp) as hour, MINUTE(timestamp) as minute, DATE(timestamp) AS date, TIME(timestamp) AS time, sensor, class, value1, value2, value3, text1, text2, text3", 
+      "class='".$class."' AND DATE(timestamp)='$date' AND ". Database::whereArray("sensor", $sensors),
+      "sensor, timestamp, field");           
+
+		$result = array();
+		foreach($dataset as $row)
+		{
+			$object = new Measure();
+      $object->fromDataRow($row);
+      $result[$object->id] = $object;
+		}
+		return $result;
+  }    
 
   public static function loadHistory($db, $sensors, $date)
   {

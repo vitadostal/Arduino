@@ -62,7 +62,12 @@
         print '<td style="background: rgba('. Utils::hex2rgb($measure->sensor->color, 0.4).')">'. Utils::sql2czech($measure->date). '</td>';
         print '<td style="background: rgba('. Utils::hex2rgb($measure->sensor->color, 0.4).')">'. $measure->time. '</td>';
         print '<td class="right">'. $measure->value1. ' <span style="color: rgba('. Utils::hex2rgb($measure->sensor->color, 1). ')">'. $measure->class->unit. '</span></td>';
-        print '<td class="left darker">'. $measure->class->hardware. '</td>';
+        print '<td class="left darker">';
+          print $measure->class->hardware;
+          //Extra case for GPS, Google Maps link
+          if ($measure->class->hardware == 'A7 GPS' && $measure->class->class == 'A7_LAT')
+            print ' <a class="nodecor" href="https://www.google.com/search?q='. $measure->value1. '+N+'. $measure->value2. '+E">⛨</a>';
+        print '</td>';              
         $count++;
       }
     }

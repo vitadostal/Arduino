@@ -60,6 +60,7 @@
   include "class/Utils.class.php";
   include "class/Sensor.class.php";
   include "class/Graph.class.php";
+  include "class/Measure.class.php";
   Params::get();
   Params::advanced();
 
@@ -98,7 +99,7 @@
       print '<button class="ui-button ui-widget ui-corner-all" onclick="$(\'.ticker\').prop(\'checked\',true);" >✔</button>';
     print '</div>';   
     //Calendar
-    print '<div class="floatright">';
+    print '<div class="floatleft">';
       print '<span class="master">Datum:</span>'; 
       print '<button onclick="$(\'#datepicker\').val(\''. Params::$date_czech_prev. '\')"  
               class="ui-button ui-widget ui-corner-all">❰❰ Předchozí den</button>&nbsp;';
@@ -123,9 +124,10 @@
     <li><a href="#tabs-4">Senzory</a></li>
     <li><a href="#tabs-5">Programy</a></li>
     <li><a href="#tabs-6">Termostat</a></li>
+    <li><a href="#tabs-7">Mapa</a></li>
   </ul>
   
-  <!-- GRAFY =============================================================== -->
+  <!-- GRAPH =============================================================== -->
   <div id="tabs-1">
     <?php
       print '<div id="graphtabs">';
@@ -140,6 +142,7 @@
               print $graph->description;
             print '</a></li>';
           }
+        
         print '</ul>';
       
         $i = 0;
@@ -164,11 +167,12 @@
           }
           $i++;
         }
+
       print '</div>';
     ?>
   </div>
 
-  <!-- MERENI ============================================================== -->
+  <!-- MEASURE ============================================================= -->
   <div id="tabs-2">
     <div id="target-history">Data budou načtena za necelých 5 sekund...<br />Toto zpoždění je záměrné kvůli rychlejšímu vykreslování webu na pomalejších sítích.  
       <script>
@@ -186,7 +190,7 @@
     </div>    
   </div>  
 
-  <!-- AKTUÁLNĚ ============================================================ -->
+  <!-- CURRENT ============================================================= -->
   <div id="tabs-3">
     <div id="target-current">Data se načítají...   
       <script>
@@ -198,7 +202,7 @@
     </div>    
   </div>
   
-  <!-- SENZORY ============================================================= -->
+  <!-- SENSOR ============================================================== -->
   <div id="tabs-4">
     <div id="target-sensor">Data se načítají...   
       <script>
@@ -207,7 +211,7 @@
     </div>  
   </div>
   
-  <!-- PROGRAMY ============================================================ -->
+  <!-- PROGRAM ============================================================= -->
   <div id="tabs-5">
     <div id="target-program">Data se načítají...   
       <script>
@@ -216,14 +220,23 @@
     </div>  
   </div>
   
-  <!-- TERMOSTAT =========================================================== -->
+  <!-- THERMOSTAT ========================================================== -->
   <div id="tabs-6">
     <div id="target-thermostat">Data se načítají...   
       <script>
          $('div#target-thermostat').load('tab5_thermostat.php?date=<?php print Params::$date_czech ?>');
       </script>
     </div>
-  </div>    
+  </div>
+  
+  <!-- MAP ================================================================= -->
+  <div id="tabs-7">
+    <div id="target-map">Data se načítají...   
+      <script>
+         $('div#target-map').load('tab6_map.php?<?php print Utils::sensorQuery(Params::$sensors) ?>&date=<?php print Params::$date_czech ?>');
+      </script>
+    </div>  
+  </div>      
 
 </div>
 

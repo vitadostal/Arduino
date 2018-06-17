@@ -57,9 +57,27 @@ class Database
     if ($order !== false) $q .= "ORDER BY $order ";
     if ($limit !== false) $q .= "LIMIT 0,$limit ";
     
-		$result = $this->conn->query($q);
+		$result = $this->conn->query($q);        
 		return $result->fetch_all(MYSQLI_ASSOC);
 	}
+  
+	public function getUnionByCondition($table, $columns, $where, $order = false, $limit = false)
+	{
+    $table   = mysqli_real_escape_string($this->conn, $table);
+
+    $q = '';
+    foreach ($where as $whereItem)
+    {
+      if ($q != '') {$q .= ") UNION ALL (";} else {$q .= "( ";}
+      $q .= "SELECT $columns FROM $table ";
+      $q .= "WHERE ". $whereItem. " ";
+      if ($order !== false) $q .= "ORDER BY $order ";
+      if ($limit !== false) $q .= "LIMIT 0,$limit ";
+    }
+      
+		$result = $this->conn->query($q. ')');        
+		return $result->fetch_all(MYSQLI_ASSOC);
+	}  
 
   public static function prepareData($data)
   {

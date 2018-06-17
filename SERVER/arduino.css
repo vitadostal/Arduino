@@ -3,9 +3,13 @@
 
   .hide {display: none;}
 
+  .nodecor {text-decoration: none;}
+
   .right {text-align: right;}
   .master {margin-top: 5px; margin-bottom: 2px; display: block;}
   .white {background-color: white;}
+
+  div.right20 {margin-right: 20px;}
   
   .unit {color: #ccc;} 
   .footer {color: #ccc; font-family: sans-serif;}
@@ -15,8 +19,8 @@
   .black {color: black;}
   .orange {color: #f9a65a;}  
   
-  .graph {min-height: 500px; min-width: 100px;} 
-  
+  .graph {min-height: 500px; min-width: 500px;} 
+
   table.default .noborder {border:none;}
   table.default .noborder-right {border-right:none;} 
   table.default .noborder-left {border-left:none;}

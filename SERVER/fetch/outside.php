@@ -1,4 +1,5 @@
 <?php
+  header('Content-type: text/plain');
 
   //Include
   include "../class/Config.class.php";
@@ -14,8 +15,8 @@
   $measureHmdt = Measure::loadLastMeasure($database, HMDT_SENSOR_OUT, HMDT_CLASS_OUT);
   $measurePres = Measure::loadLastMeasure($database, PRES_SENSOR_OUT, PRES_CLASS_OUT);
 
-  print $measureTemp->value1;
+  if (isset($measureTemp->value1)) print $measureTemp->value1;
   print ';';  
-  print $measureHmdt->value1;
+  if (isset($measureHmdt->value1)) print $measureHmdt->value1;
   print ';';  
-  print $measurePres->value1;
+  if (isset($measurePres->value1)) print $measurePres->value1;
