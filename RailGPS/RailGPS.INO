@@ -19,24 +19,24 @@ const byte dispClock =  2;   //SSD1306 sCLOCK
 
 const byte test   = false;   //use predefined GPS value, skip GPS module
 
-int interval_fast    =  5;   //number of second, read GPS
-int interval_slow    = 30;   //number of second, read GPS
-int fail_interval    =  2;   //number of minutes, wake up from sleep after failure
-int succ_attempt     = 10;   //measure taken into account
+int interval_fast    =  5;   //number of seconds, read GPS
+int interval_slow    = 30;   //number of seconds, read GPS
+int succ_attempt     = 10;   //maximum number of measures taken into account
 int last_attempt     = 60;   //number of seconds allowed after first reading
-int sat_enough       =  5;   //number of satellites which is considered fine
+int sat_enough       =  5;   //number of satellites which is sufficient
 int maxOperatingTime =  4;   //number of minutes when device is automatically turned off
-int flashPortion   = 2000;   //size of flash memory transmitted
+#define flashPortion  2000   //size of flash memory transmitted
 
       String sensor          = "<from-eeprom>";           //Sensor indentification
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.10 17 Jun 2018";       //Firmware version
+const String firmware        = "v1.11 1 Jul 2018";        //Firmware version
       byte   wifiReporting   = 255; //255 = <from-eeprom> //WiFi reporting enabled
       byte   gsmReporting    = 255; //255 = <from-eeprom> //GSM reporting enabled
       byte   displayUsed     = 255; //255 = <from-eeprom> //Display support enabled
       byte   flashUsed       = 255; //255 = <from-eeprom> //Flash storage enabled
-      byte   succ_interval   = 255; //255 = <from-eeprom> //Next measure (in minutes)
+      byte   succ_interval   = 255; //255 = <from-eeprom> //Next measure (in min) after success
+      byte   fail_interval   = 255; //255 = <from-eeprom> //Next measure (in min) after fail
 const char*  update_path     = "/";                       //Firmware update path
       String sleepmode_path  = "/fetch/railgps.txt";      //Settings path
       String update_username = "admin";                   //Firmware update login
@@ -52,7 +52,7 @@ char end_c[2];
 
 float lat, lng;
 int sat;
-String flash;
+char flash[flashPortion + 1];
 String timex = "000000";
 String date = "000000";
 
@@ -114,10 +114,10 @@ void startLogo()
   Serial.println("     |      |   |  |      AiThinker A7 GSM/GPRS/GPS Module");
   Serial.println("===  | --\\  |---/  \\---\\  ================================  ===");
   Serial.println("     |   |  |          |  RailGPS " + firmware);
-  Serial.println("     \\---/  |      ----/  " + sensor + " interval " + succ_interval + " min");
+  Serial.println("     \\---/  |      ----/  " + sensor + " interval " + succ_interval + "/" + fail_interval + " min");
   Serial.println();
   displayMessage("RailGPS " + firmware);
-  displayMessage(sensor + " interval " + succ_interval + " min");
+  displayMessage(sensor + " interval " + succ_interval + "/" + fail_interval + " min");
 }
 
 void powerOnGPS(int sec)
@@ -183,7 +183,6 @@ String readSerial()
     gpsSerial.println(data);
     Serial.println(">>>>sent>>>>>>>>>>>>>>>>>>>>");
     Serial.print(data);
-    //Serial.println();
     return data;
   }
 
@@ -206,7 +205,6 @@ String readGPS()
   if (data.length() > 0) {
     Serial.println("====received================");
     Serial.print(data);
-    //Serial.println();
     return data;
   }
 
@@ -223,7 +221,13 @@ void testValidity(String answer)
   if (test)
   {
     terminateGPS();
-    postData(49.29547, 17.40901, -1, timex, date);
+    if (flashUsed) {
+      SPIFFS.begin();
+      saveFlashFile(49.29547, 17.40901, 1, timex, date);
+      loadFlashFile(flashPortion);
+    }
+    if (gsmReporting) postData(49.29547, 17.40901, 1, timex, date);
+    if (wifiReporting) postDataWifi(49.29547, 17.40901, 1, timex, date);
     powerOffGPS();
     deepSleep(succ_interval);
   }
@@ -393,7 +397,7 @@ void postDataWifi(float lat, float lng, int sat, String timex, String date)
     String params;
     params += "key=" + String(key);
     params += "&sensor=" + String(sensor);
-    if (flash != "")
+    if (flashUsed)
       params += "&data=" + String(flash);
     else
     {
@@ -404,7 +408,7 @@ void postDataWifi(float lat, float lng, int sat, String timex, String date)
 
     //POST request
     String request;
-    if (flash != "")
+    if (flashUsed)
       request += "POST /script/measure_add_gps.php HTTP/1.1\r\n";
     else
       request += "POST /script/measure_add.php HTTP/1.1\r\n";
@@ -413,7 +417,7 @@ void postDataWifi(float lat, float lng, int sat, String timex, String date)
     request += "Connection: close\r\n";
     request += "Content-Type: application/x-www-form-urlencoded\r\n";
     request += "Content-Length: ";
-    request += (params.length() + 4);
+    request += (params.length());
     request += "\r\n\r\n";
     request += params;
     request += "\r\n\r\n";
@@ -446,7 +450,7 @@ void postData(float lat, float lng, int sat, String timex, String date)
     String params;
     params += "key=" + String(key);
     params += "&sensor=" + String(sensor);
-    if (flash != "")
+    if (flashUsed)
       params += "&data=" + String(flash);
     else
     {
@@ -457,7 +461,7 @@ void postData(float lat, float lng, int sat, String timex, String date)
 
     //POST request
     String request;
-    if (flash != "")
+    if (flashUsed)
       request += "POST /script/measure_add_gps.php HTTP/1.1\r\n";
     else
       request += "POST /script/measure_add.php HTTP/1.1\r\n";
@@ -466,11 +470,18 @@ void postData(float lat, float lng, int sat, String timex, String date)
     request += "Connection: close\r\n";
     request += "Content-Type: application/x-www-form-urlencoded\r\n";
     request += "Content-Length: ";
-    request += (params.length() + 4);
+    request += (params.length());
     request += "\r\n\r\n";
     request += params;
     request += "\r\n\r\n";
-    gpsSerial.print(request);
+    
+    for (int i = 0; i < request.length(); i++) 
+    {
+      gpsSerial.print(request[i]);
+      yield();
+      if (i % 750 == 749) delay(1250);
+    }
+
     gpsSerial.println(end_c);
     gpsSerial.println(end_c);
     gpsSerial.println(end_c);
@@ -567,7 +578,7 @@ void readMemory()
     char  wifiReporting;
     char  gsmReporting;
     char  succ_interval;
-    char  sleepMode;
+    char  fail_interval;
   } memory;
 
   EEPROM.begin(512);
@@ -582,9 +593,10 @@ void readMemory()
   if (displayUsed     == 255)             displayUsed     = byte(memory.displayUsed);
   if (flashUsed       == 255)             flashUsed       = byte(memory.flashUsed);
   if (succ_interval   == 255)             succ_interval   = byte(memory.succ_interval);
+  if (fail_interval   == 255)             fail_interval   = byte(memory.fail_interval);
 }
 
-void writeMemory(String sensor, String key, byte succ_interval, byte gsmReporting, byte wifiReporting, byte displayUsed, byte flashUsed)
+void writeMemory(String sensor, String key, byte succ_interval, byte fail_interval, byte gsmReporting, byte wifiReporting, byte displayUsed, byte flashUsed)
 {
   struct config
   {
@@ -600,6 +612,7 @@ void writeMemory(String sensor, String key, byte succ_interval, byte gsmReportin
   EEPROM.write(508 - 1, wifiReporting);
   EEPROM.write(509 - 1, gsmReporting);
   EEPROM.write(510 - 1, succ_interval);
+  EEPROM.write(511 - 1, fail_interval);
   EEPROM.commit();
   set = true;
 }
@@ -779,6 +792,9 @@ void processConfig(String line, String macAdr)
       succ_interval = line.substring(0, line.indexOf(";")).toInt();
 
       line = line.substring(line.indexOf(";") + 1);
+      fail_interval = line.substring(0, line.indexOf(";")).toInt();
+
+      line = line.substring(line.indexOf(";") + 1);
       gsmReporting = line.substring(0, line.indexOf(";")).toInt();
 
       line = line.substring(line.indexOf(";") + 1);
@@ -790,7 +806,7 @@ void processConfig(String line, String macAdr)
       line = line.substring(line.indexOf(";") + 1);
       flashUsed = line.substring(0, line.indexOf(";")).toInt();
 
-      writeMemory(sensor, key, succ_interval, gsmReporting, wifiReporting, displayUsed, flashUsed);
+      writeMemory(sensor, key, succ_interval, fail_interval, gsmReporting, wifiReporting, displayUsed, flashUsed);
       return;
     }
     oldline = line;
@@ -858,9 +874,7 @@ void loadFlashFile(int pos)
 
   //Read bytes from the end of file
   f.seek(f.size() - pos, SeekSet);
-  char inp[pos];
-  f.readBytes(inp, pos);
+  f.readBytes(flash, pos);
+  flash[pos] = '\0';
   f.close();
-
-  flash = String(inp);
 }
