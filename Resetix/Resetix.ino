@@ -23,6 +23,7 @@ void setup()
   Console.println("Please enter P for POWER ON/OFF ");
   Console.println("             R for RESET ");
   Console.println("             S for SHUTDOWN ");
+  Console.println("             H for HELP ");
 }
 
 void loop()
@@ -48,6 +49,13 @@ void loop()
       delay(10000);
       digitalWrite(relayPower, LOW);
     }
+    if (incomingByte == 'H')
+    {
+      Console.println("Please enter P for POWER ON/OFF ");
+      Console.println("             R for RESET ");
+      Console.println("             S for SHUTDOWN ");
+      Console.println("             H for HELP ");
+    }    
   }
   
   delay(100);
