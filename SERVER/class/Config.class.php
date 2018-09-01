@@ -13,6 +13,7 @@ define("HYSTERESIS", 0.5);
 define("GPS_CLASS", "A7_LAT");
 define("GPS_CLASS_LONG", "A7_LONG");
 define("GPS_CLASS_SAT", "A7_SAT");
+define("GPS_CLASS_VCC", "A7_VCC");
 define("TIME_STEP", 5);
 
 class Config
@@ -34,4 +35,5 @@ class Config
   public static $gpsclass = GPS_CLASS;  
   public static $gpsclasslong = GPS_CLASS_LONG;
   public static $gpsclasssat = GPS_CLASS_SAT;
+  public static $gpsclassvcc = GPS_CLASS_VCC;
 }
