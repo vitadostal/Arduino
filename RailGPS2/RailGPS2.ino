@@ -12,10 +12,10 @@ ADC_MODE(ADC_VCC);
 const char*  server          = "";   //Processing server
       String key             = "";   //API write key
 
-#define cycles 40
+#define cycles 50
 #define packet 13
-#define last 520
-#define flashSize 521
+#define last 650
+#define flashSize 651
 #define modulo 10
 #define interval 60
 
@@ -165,6 +165,7 @@ void loop()
   int sat = 0;
 
   Serial.println();
+  Serial.println("====================");
   Serial.println("START");
 
   readUblox(3000);
@@ -180,7 +181,7 @@ void loop()
     //Serial.println(flash);
     saveFlashFile();
       
-    if ((flash[last]-48) % modulo == 0)
+    if ((flash[last]-48) % modulo == 1)
     {
       beep(100);
       WiFiManager wifiManager;
@@ -242,9 +243,6 @@ void formatFlashFile()
 
 void updateFlashMemory()
 {
-  //memset(&flash, '-', flashSize);
-  int pointer = (flash[last]-48) * packet;
-
   unsigned long dt_time =
       pvt.second
     + pvt.minute * 60
@@ -254,17 +252,26 @@ void updateFlashMemory()
     + pvt.month       * 31
     + (pvt.year-2000) * 372;
   unsigned long dt = dt_date*100000 + dt_time;
+
+  if (flash[last] < 48 || flash[last] > 48 + cycles-1) flash[last] = 48;
+  int pointer = (flash[last]-48) * packet;
   
   memcpy(&flash[pointer + 0], &dt, 4);
   memcpy(&flash[pointer + 4], &pvt.numSV, 1);
   memcpy(&flash[pointer + 5], &pvt.lon, 4);
   memcpy(&flash[pointer + 9], &pvt.lat, 4);
 
-  flash[last]++;
-  if (flash[last] < 48 || flash[last] > 48 + cycles-1) flash[last] = 48;  
+  Serial.print("Cycle: ");
+  Serial.print(flash[last] - 48);
+  Serial.print(" lat: ");
+  Serial.print(pvt.lat);
+  Serial.print(" long: ");
+  Serial.print(pvt.lon);
+  Serial.print(" sat: ");
+  Serial.println(pvt.numSV);
 
-  Serial.print("Pos: ");
-  Serial.println(flash[last] - 48);
+  flash[last]++;
+  if (flash[last] < 48 || flash[last] > 48 + cycles-1) flash[last] = 48;
 }
 
 void saveFlashFile()
@@ -278,7 +285,12 @@ void saveFlashFile()
     if (!f) return;
   }
 
-  f.print(flash);
+  if(f.print(flash) != flashSize)
+  {
+    Serial.println("Printing to log.txt failed.");    
+    f.print(flash);
+  }
+
   f.close();
 }
 

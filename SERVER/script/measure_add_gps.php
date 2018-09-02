@@ -3,7 +3,7 @@
   include "../class/Config.class.php";
   include "../class/Database.class.php";
   include "../class/Measure.class.php";
-
+  
   $database = new Database();
   $database->connect();
     
@@ -20,10 +20,10 @@
 
   $records = explode ('|', $data); 
   if (!empty($records)) array_shift($records); //delete first incomplete record
-
+  
   foreach ($records as $record)
   {
-    $blocks = explode (';', $record);
+    $blocks = explode(';', $record);    
 
     try
     {

@@ -50,7 +50,7 @@
       else
       {
         $inlineCount = 0;
-        if ($count >= 20) break;
+        if ($count >= 21) break;
         if ($lastSensor != null) print '</tr>';
         $lastTimestamp = $measure->timestamp;
         $lastSensor = $measure->sensor;
@@ -65,7 +65,7 @@
         print '<td class="left darker">';
           print $measure->class->hardware;
           //Extra case for GPS, Google Maps link
-          if ($measure->class->hardware == 'A7 GPS' && $measure->class->class == 'A7_LAT')
+          if (isset($measure->class->class) && $measure->class->class == Config::$gpsclass)
             print ' <a class="nodecor" href="https://www.google.com/search?q='. $measure->value1. '+N+'. $measure->value2. '+E">⛨</a>';
         print '</td>';              
         $count++;
@@ -73,7 +73,7 @@
     }
     print '</tr></table>';
 
-    print '<p>Tabulka se automaticky aktualizuje každých 5 sekund. Je zobrazeno 20 nejnovějších záznamů.</p>';    
+    print '<p>Tabulka se automaticky aktualizuje každých 5 sekund. Je zobrazeno 21 nejnovějších záznamů.</p>';    
     print '<button class="ui-button ui-widget ui-corner-all" onclick="window.location.href=\'?date='.Params::$date_czech.'\'" >Zobrazit všechny senzory</button>';
   }
   else

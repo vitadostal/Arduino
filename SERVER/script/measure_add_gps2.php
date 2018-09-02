@@ -33,13 +33,14 @@
   $nextweek->modify('+1 week');
   
   //Analyze sensor data
+  //file_put_contents('/tmpx', date("D M j G:i:s T Y"). "\n");
   $cycles = floor(strlen($packet) / 13);
   $records = array(); 
   for($cycle = 0; $cycle < $cycles; $cycle++)
   {
     try
     {
-      $position = $cycle * 13;    
+      $position = $cycle * 13;
   
       $id  = unpack('V', substr($packet, $position+0, 4));
       $sat = unpack('C', substr($packet, $position+4, 1));
@@ -54,8 +55,8 @@
       $record = array();
       $record['id'] = $id;
       $record['sat'] = $sat;
-      $record['lng'] = round($lng/ 10000000, 5);
-      $record['lat'] = round($lat/ 10000000, 5);
+      $record['lng'] = round($lng / 10000000, 5);
+      $record['lat'] = round($lat / 10000000, 5);
       
       $date = floor($id / 100000);
       $time = $id - $date*100000;
@@ -85,8 +86,9 @@
       $timestamp = $datetime->format('Y-m-d H:i:s');
       
       $record['stamp'] = $timestamp;
+      //file_put_contents('/tmpx', "[$cycle]\t$lng\t$lat\t$sat\t$timestamp\n", FILE_APPEND);      
 
-      if ($lastweek < $datetime && $nextweek > $datetime && floatval($lat) != 0 && floatval($lng) != 0 && intval($sat) != 0) $records[$id] = $record;
+      if ($lastweek < $datetime && $nextweek > $datetime && $lat != -1 && $lng != -1 && $sat != 255) $records[$id] = $record;
     }
     catch (Exception $e) {}    
   }
@@ -127,13 +129,3 @@
 
   $database->conn->multi_query($sql);
   $database->conn->close();
-
-  /*file_put_contents('/tmpx', date("D M j G:i:s T Y"). "\n");
-  file_put_contents('/tmpx', count($records). "\n", FILE_APPEND);  
-  file_put_contents('/tmpx', $lastid. "\n", FILE_APPEND);  
-  file_put_contents('/tmpx', $record['id']. "\n", FILE_APPEND);  
-  file_put_contents('/tmpx', $cycles. "\n", FILE_APPEND);  
-  file_put_contents('/tmpx', $key. "\n", FILE_APPEND);
-  file_put_contents('/tmpx', $sensor. "\n", FILE_APPEND);
-  file_put_contents('/tmpx', $voltage. "\n", FILE_APPEND);  
-  file_put_contents("/tmpx", print_r($records, true), FILE_APPEND);*/

@@ -3,12 +3,12 @@
 class Database
 {
   public $conn;
-
+  
   private $servername = "localhost";	
   private $dbname;
-	private $username;
-	private $password;
-   
+  private $username;
+  private $password;
+  
   public function connect()
   {
     $this->loadCredentials();
