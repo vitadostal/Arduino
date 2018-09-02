@@ -22,10 +22,17 @@
   //Get last measure stored in the database
   $lastdatetime = null;
   $measure = Measure::loadLastMeasure($database, $sensor, Config::$gpsclasssat);
-  if ($measure != null) $lastdatetime = new DateTime($measure->timestamp);  
+  if ($measure != null) $lastdatetime = new DateTime($measure->timestamp);
+  
+  //Get last week
+  $lastweek = new DateTime();
+  $lastweek->modify('-1 week');
+  
+  //Get next week 
+  $nextweek = new DateTime();
+  $nextweek->modify('+1 week');
   
   //Analyze sensor data
-  $lastid = 0;
   $cycles = floor(strlen($packet) / 13);
   $records = array(); 
   for($cycle = 0; $cycle < $cycles; $cycle++)
@@ -45,6 +52,7 @@
       $lat = $lat[1];
       
       $record = array();
+      $record['id'] = $id;
       $record['sat'] = $sat;
       $record['lng'] = round($lng/ 10000000, 5);
       $record['lat'] = round($lat/ 10000000, 5);
@@ -78,19 +86,19 @@
       
       $record['stamp'] = $timestamp;
 
-      $records[$id] = $record;
-      if ($id > $lastid) $lastid = $id;
+      if ($lastweek < $datetime && $nextweek > $datetime && floatval($lat) != 0 && floatval($lng) != 0 && intval($sat) != 0) $records[$id] = $record;
     }
     catch (Exception $e) {}    
   }
 
   //Sort records from the oldest to the newest
   ksort($records);
+  foreach ($records as $record) $lastid = $record['id'];
     
   //Database transaction
   $sql = 'START TRANSACTION;';
  
-  foreach ($records as $id=>$record)
+  foreach ($records as $record)
   {
     $datetime = new DateTime($record['stamp']);
 
@@ -106,8 +114,8 @@
       $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
       VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasssat."', 3, '".$record['sat']."');";
       
-      //Last record
-      if ($id == $lastid)
+      //Last record has voltage included
+      if ($lastid == $record['id'])
       {
         $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
         VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";      
@@ -122,6 +130,8 @@
 
   /*file_put_contents('/tmpx', date("D M j G:i:s T Y"). "\n");
   file_put_contents('/tmpx', count($records). "\n", FILE_APPEND);  
+  file_put_contents('/tmpx', $lastid. "\n", FILE_APPEND);  
+  file_put_contents('/tmpx', $record['id']. "\n", FILE_APPEND);  
   file_put_contents('/tmpx', $cycles. "\n", FILE_APPEND);  
   file_put_contents('/tmpx', $key. "\n", FILE_APPEND);
   file_put_contents('/tmpx', $sensor. "\n", FILE_APPEND);
