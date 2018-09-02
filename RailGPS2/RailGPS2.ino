@@ -20,7 +20,7 @@ const char*  server          = "";   //Processing server
 #define interval 60
 
 SoftwareSerial ublox(gpsrx, gpstx);
-char flash[flashSize];
+uint8_t flash[flashSize];
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 
 const char UBLOX_INIT[] PROGMEM = {
@@ -229,7 +229,7 @@ void postDataWifi()
     request += "\r\n\r\n";
     request += params;
     client.print(request);
-    client.print(flash);
+    client.write((uint8_t*)flash, flashSize);
     client.println("\r\n\r\n");
   }
   client.stop();
@@ -284,28 +284,16 @@ void saveFlashFile()
     File f = SPIFFS.open("/log.txt", "w+");
     if (!f) return;
   }
-
-  if(f.print(flash) != flashSize)
-  {
-    Serial.println("Printing to log.txt failed.");    
-    f.print(flash);
-  }
-
+  f.write(flash, flashSize);
   f.close();
 }
 
 void loadFlashFile()
 {
-  String data;
-  
   File f = SPIFFS.open("/log.txt", "r");
   if (!f)
-  {
     Serial.println("Reading from log.txt failed.");
-  }
   else
-  {
-    data = f.readBytes(flash, flashSize);
-  }
+    f.read(flash, flashSize);
   f.close();
 }
