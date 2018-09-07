@@ -12,12 +12,13 @@ ADC_MODE(ADC_VCC);
 const char*  server          = "";   //Processing server
       String key             = "";   //API write key
 
-#define cycles 50
+#define cycles 160
 #define packet 13
-#define last 650
-#define flashSize 651
-#define modulo 10
-#define interval 60
+#define last 2080
+#define flashSize 2081
+#define modulo 20
+#define message 40
+#define interval 30
 
 SoftwareSerial ublox(gpsrx, gpstx);
 uint8_t flash[flashSize];
@@ -186,8 +187,8 @@ void loop()
       beep(100);
       WiFiManager wifiManager;
       wifiManager.setTimeout(10000);
-      wifiManager.autoConnect("RailGPS");        
-      postDataWifi();
+      wifiManager.autoConnect("RailGPS");
+      for (int cycle = 0; cycle < cycles / message; cycle++) postDataWifi(cycle);
       WiFi.mode(WIFI_OFF);      
     }
     else
@@ -208,7 +209,7 @@ void loop()
   ESP.deepSleep(interval * 1000000);
 }
 
-void postDataWifi()
+void postDataWifi(int cycle)
 {
   WiFiClient client;
   if (client.connect(server, 80))
@@ -225,11 +226,22 @@ void postDataWifi()
     request += "Connection: close\r\n";
     request += "Content-Type: application/x-www-form-urlencoded\r\n";
     request += "Content-Length: ";
-    request += (params.length() + flashSize);
+    request += (params.length() + message*packet);
     request += "\r\n\r\n";
     request += params;
     client.print(request);
-    client.write((uint8_t*)flash, flashSize);
+
+    int from = (((flash[last]-48) + (cycle*message)) % cycles) * packet;
+    int len = message*packet;
+    if (from + len <= last)
+    {
+      client.write((uint8_t*)flash+from, len);
+    }
+    else
+    {
+      client.write((uint8_t*)flash+from, last-from);
+      client.write((uint8_t*)flash, len-(last-from));
+    }
     client.println("\r\n\r\n");
   }
   client.stop();
