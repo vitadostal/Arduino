@@ -22,6 +22,8 @@ char wifiPasswd[20]      = "<from-eeprom>";           //Wireless network passwor
 #define flashSize 3121                                //cycles * pcaket + 1
 #define modulo 20                                     //number of measures when sending is triggered
 #define message 40                                    //number of measures in one sent message
+#define bootstrap 0                                   //initial programming of GPS module
+#define sleep 15                                      //sleep interval for GPS module [s]
 #define interval 30                                   //interval between measures [s]
 
 const char messages[] = {0, 0, 0, 1, 1, 1};           //map of chunks sent in one message
@@ -97,6 +99,15 @@ void calcChecksum(unsigned char* CK) {
   }
 }
 
+void setChecksum(unsigned char* data, int length) {
+  data[length - 2] = 0;
+  data[length - 1] = 0;
+  for (int i = 2; i < length - 2; i++) {
+    data[length - 2] += data[i];
+    data[length - 1] += data[length - 2];
+  }
+}
+
 bool processGPS() {
   static int fpos = 0;
   static unsigned char checksum[2];
@@ -151,12 +162,36 @@ static void readUblox(unsigned long ms)
 
 void beep(int ms)
 {
-  if (beeper > 0)
+  pinMode(beeper, OUTPUT);
+  delay(ms);
+  pinMode(beeper, INPUT);
+}
+
+void bootstrapUblox()
+{
+  for (int i = 0; i < sizeof(UBLOX_INIT); i++)
   {
-    pinMode(beeper, OUTPUT);
-    delay(ms);
-    pinMode(beeper, INPUT);
+    ublox.write(pgm_read_byte(UBLOX_INIT + i));
+    delay(5);
   }
+}
+
+void sleepUblox()
+{
+  //UBX-RXM-PMREQ
+  unsigned char data[] = {0xB5, 0x62, 0x02, 0x41, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
+  unsigned long num = sleep * 1000;
+  memcpy(&data[6], &num, 4);
+  setChecksum(data, sizeof(data));
+
+  for (int i = 0; i < sizeof(data); i++)
+  {
+    ublox.write(data[i]);
+    delay(5);
+  }
+
+  Serial.print("Ublox sleep: ");
+  Serial.println(sleep);
 }
 
 void setup()
@@ -170,62 +205,53 @@ void setup()
 
 void loop()
 {
-  float lng = 0;
-  float lat = 0;
-  int sat = 0;
-
   Serial.println();
   Serial.println("====================");
-  Serial.println("START");
 
   readUblox(3000);
   if (pvt.fixType < 2) {
     readUblox(3000);
-    Serial.println("FIX-1");
+    Serial.println("Acquiring location...");
   }
   if (pvt.fixType < 2) {
     readUblox(3000);
-    Serial.println("FIX-2");
+    Serial.println("Acquiring location...");
   }
   if (pvt.fixType > 1)
   {
     SPIFFS.begin();
-    //Serial.println(flash);
     loadFlashFile();
-    //Serial.println(flash);
     updateFlashMemory();
-    //Serial.println(flash);
     saveFlashFile();
+
+    if (sleep && pvt.numSV >= 10) sleepUblox();
 
     if ((flash[last]) % modulo == 1)
     {
-      beep(100);
+      if (beeper) beep(100);
       connectWifi();
       for (int i = 0; i < cycles / message; i++) if (messages[i]) postDataWifi(i);
       WiFi.mode(WIFI_OFF);
     }
     else
     {
-      beep(1);
+      if (beeper) beep(1);
     }
   }
   else
   {
-    for (int i = 0; i < sizeof(UBLOX_INIT); i++)
-    {
-      ublox.write(pgm_read_byte(UBLOX_INIT + i));
-      delay(5);
-    }
+    if (bootstrap) bootstrapUblox();
   }
 
-  Serial.println("SLEEP");
+  Serial.print("ESP sleep: ");
+  Serial.println(interval);
   ESP.deepSleep(interval * 1000000);
 }
 
 void postDataWifi(int chunk)
 {
   WiFiClient client;
-  Serial.print("DATA");
+  Serial.print("Chunk sent: ");
   Serial.println(chunk + 1);
 
   if (client.connect(server, 80))
@@ -293,7 +319,7 @@ void updateFlashMemory()
   Serial.print(flash[last]);
   Serial.print(" lat: ");
   Serial.print(pvt.lat);
-  Serial.print(" long: ");
+  Serial.print(" lng: ");
   Serial.print(pvt.lon);
   Serial.print(" sat: ");
   Serial.println(pvt.numSV);
