@@ -1,14 +1,19 @@
 //Railtour GPS data gatherer II
 //Vitezslav Dostal | started 24.8.2018
-//Hardware required: Ublox Neo GPS
+//Hardware required: UbloxNeo & SIM800L
 #include <SoftwareSerial.h>
 #include <ESP8266WiFi.h>
 #include <EEPROM.h>
 #include <FS.h>
 ADC_MODE(ADC_VCC);
+#define gpsbaud 9600
 #define beeper 0
 #define gpstx 4
 #define gpsrx 5
+#define simbaud 38400
+#define simtx 12
+#define simrx 13
+#define simreset 14
 
 char sensor[20]          = "<from-eeprom>";           //Sensor indentification
 char server[40]          = "<from-eeprom>";           //Processing server
@@ -23,13 +28,19 @@ char wifiPasswd[20]      = "<from-eeprom>";           //Wireless network passwor
 #define modulo 20                                     //number of measures when sending is triggered
 #define message 40                                    //number of measures in one sent message
 #define bootstrap 0                                   //initial programming of GPS module
-#define sleep 15                                      //sleep interval for GPS module [s]
+#define reportwifi 0                                  //report measures via WiFi
+#define reportgprs 1                                  //report measures via GPRS
+#define sleep 20                                      //sleep interval for GPS module [s]
 #define interval 30                                   //interval between measures [s]
+#define shortinterval 10                              //interval between measures after GPRS sent [s]
 
-const char messages[] = {0, 0, 0, 1, 1, 1};           //map of chunks sent in one message
+const char messages[] = {0, 0, 0, 0, 1, 1};           //map of chunks sent in one message
 
 SoftwareSerial ublox(gpsrx, gpstx);
+SoftwareSerial sim800(simrx, simtx);
 uint8_t flash[flashSize];
+String reply;
+const unsigned char terminal[2] = { 0x1a, 0x00 };
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 
 const char UBLOX_INIT[] PROGMEM = {
@@ -167,6 +178,14 @@ void beep(int ms)
   pinMode(beeper, INPUT);
 }
 
+void resetModem()
+{
+  pinMode(simreset, OUTPUT);
+  digitalWrite(simreset, LOW);
+  delay(50);
+  pinMode(simreset, INPUT_PULLUP);
+}
+
 void bootstrapUblox()
 {
   for (int i = 0; i < sizeof(UBLOX_INIT); i++)
@@ -194,13 +213,21 @@ void sleepUblox()
   Serial.println(sleep);
 }
 
+void sweetDreams(int period)
+{
+  Serial.print("ESP sleep: ");
+  Serial.println(period);
+  ESP.deepSleep(period * 1000000);
+}
+
 void setup()
 {
   WiFi.mode(WIFI_OFF);
   memset(&flash, 255, flashSize);
   Serial.begin(115200);
   readMemory();
-  ublox.begin(9600);
+  ublox.begin(gpsbaud);
+  sim800.begin(simbaud);
 }
 
 void loop()
@@ -223,15 +250,25 @@ void loop()
     loadFlashFile();
     updateFlashMemory();
     saveFlashFile();
+    SPIFFS.end();
 
     if (sleep && pvt.numSV >= 10) sleepUblox();
 
     if ((flash[last]) % modulo == 1)
     {
       if (beeper) beep(100);
-      connectWifi();
-      for (int i = 0; i < cycles / message; i++) if (messages[i]) postDataWifi(i);
-      WiFi.mode(WIFI_OFF);
+      if (reportwifi)
+      {
+        connectWifi();
+        for (int i = 0; i < cycles / message; i++) if (messages[i]) postDataWifi(i);
+        WiFi.mode(WIFI_OFF);
+      }
+      if (reportgprs)
+      {
+        if (connectGPRS()) postDataGPRS();
+        disconnectGPRS();
+        sweetDreams(shortinterval);
+      }
     }
     else
     {
@@ -243,9 +280,82 @@ void loop()
     if (bootstrap) bootstrapUblox();
   }
 
-  Serial.print("ESP sleep: ");
-  Serial.println(interval);
-  ESP.deepSleep(interval * 1000000);
+  sweetDreams(interval);
+}
+
+bool connectGPRS()
+{
+  bool status;
+  bool ciicr;
+
+  processCommand("AT+IPR=" + String(simbaud), "", 5);
+  processCommand("AT+CSCLK=0", "", 5);
+  processCommand("AT+COPS?", "", 5);
+  processCommand("AT+CGATT?", "", 5);
+  processCommand("AT+CSQ", "", 5);
+
+  status = processCommand("AT+CSTT=\"internet\",\"\",\"\"", "OK", 5);
+  if (!status)
+  {
+    Serial.println("Modem reset");
+    resetModem();
+    delay(20000);
+    processCommand("AT+IPR=" + String(simbaud), "", 5);
+    processCommand("AT+CSCLK=0", "", 5);
+    status = processCommand("AT+CSTT=\"internet\",\"\",\"\"", "OK", 5);
+  }
+  if (status) ciicr = processCommand("AT+CIICR", "OK", 5);
+  if (status) delay(4000);
+  if (status) status = processCommand("AT+CIPSTATUS", "IP GPRSACT", 5);
+  if (ciicr) status = true;
+  if (status) processCommand("AT+CIFSR", "", 5);
+  if (status) processCommand("AT+CIPSTART=\"TCP\",\"" + String(server) + "\",80", "CONNECT OK", 5);
+  if (status) delay(4000);
+  return status;
+}
+
+void postDataGPRS()
+{
+  String params;
+  params += String(key) + '|';
+  params += String(sensor) + '|';
+  params += String(ESP.getVcc()) + '|';
+
+  String request;
+  request += "POST /script/measure_add_gps2.php HTTP/1.1\r\n";
+  request += "Host: " + String(server) + "\r\n";
+  request += "User-Agent: ArduinoSIM800" + String(sensor) + "\r\n";
+  request += "Connection: close\r\n";
+  request += "Content-Type: application/x-www-form-urlencoded\r\n";
+  request += "Content-Length: ";
+  request += (params.length() + messagesInChunks() * message * packet);
+  request += "\r\n\r\n";
+  request += params;
+
+  processCommand("AT", "OK", 1);
+  processCommand("AT", "OK", 1);
+  processCommand("AT+CIPQSEND=1", "", 1);
+  processCommand("AT+CIPSEND=" + String(request.length() + messagesInChunks() * message * packet + 4), ">", 1);
+  sim800.print(request);
+
+  Serial.println("Sending data...");
+  for (int cycle = 0; cycle < cycles ; cycle++)
+  {
+    if (!messages[cycle / message]) continue;
+    yield();
+    sim800.write((uint8_t*)flash + (((cycle + flash[last]) % cycles) * packet), packet);
+  }
+  sim800.println("\r\n\r\n");
+
+  delay(3000);
+  processCommand("AT+CIPSEND?", "", 1);
+}
+
+void disconnectGPRS()
+{
+  processCommand("AT+CIPCLOSE", "", 1);
+  processCommand("AT+CIPSHUT", "", 1);
+  processCommand("AT+CSCLK=2", "", 5);
 }
 
 void postDataWifi(int chunk)
@@ -388,4 +498,55 @@ void connectWifi()
     Serial.println("Connecting to WiFi...");
     delay(500);
   }
+}
+
+String readModem()
+{
+  String reply;
+  unsigned long lastTime;
+
+  if (sim800.available()) {
+    lastTime = millis();
+    while (millis() < lastTime + 100) {
+      yield();
+      while (sim800.available() > 0) {
+        yield();
+        char c = sim800.read();
+        reply += c;
+      }
+    }
+  }
+  if (reply.length() > 0)
+  {
+    Serial.println(reply);
+    return reply;
+  }
+  return "";
+}
+
+bool processCommand(String command, String expect, int timeout)
+{
+  reply = "";
+  unsigned long processTime;
+
+  Serial.print(">>> ");
+  Serial.print(command);
+  Serial.println(" >>>");
+  sim800.println(command);
+
+  processTime = millis();
+  while (millis() < processTime + timeout * 1000)
+  {
+    yield();
+    reply = readModem();
+    if (reply.indexOf(expect) != -1) return true;
+  }
+  return false;
+}
+
+int messagesInChunks()
+{
+  int total = 0;
+  for (int i = 0; i < cycles / message; i++) if (messages[i]) total += 1;
+  return total;
 }
