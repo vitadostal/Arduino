@@ -3,6 +3,7 @@
   include "../class/Config.class.php";
   include "../class/Database.class.php";
   include "../class/Measure.class.php";
+  include "../class/Sensor.class.php";
   
   $database = new Database();
   $database->connect();
@@ -12,12 +13,15 @@
   
   $key = $blocks[0];
   $sensor = $blocks[1];
-  $voltage = round($blocks[2] / 1024, 2);
+  $voltage = round($blocks[2] / 1024, 2) + 0.3;
   $packet = $blocks[3];
   
   if (!isset ($key) || $key != Config::$key) exit();
   if (isset ($sensor)) $sensor = mysqli_real_escape_string($database->conn, $sensor); else exit();
-  if (isset ($voltage)) $voltage = mysqli_real_escape_string($database->conn, $voltage); else exit();    
+  if (isset ($voltage)) $voltage = mysqli_real_escape_string($database->conn, $voltage); else exit();
+  
+  //Sensor identification can be changed in configuration
+  $sensor = Sensor::remap($sensor);  
 
   //Get last measure stored in the database
   $lastdatetime = null;
@@ -33,7 +37,7 @@
   $nextweek->modify('+1 week');
   
   //Analyze sensor data
-  //file_put_contents('/tmpx', date("D M j G:i:s T Y"). "\n");
+  //file_put_contents('/tmpx', date("D M j G:i:s T Y, "). strlen($packet). "\n", FILE_APPEND);
   $cycles = floor(strlen($packet) / 13);
   $records = array(); 
   for($cycle = 0; $cycle < $cycles; $cycle++)
@@ -107,11 +111,14 @@
     //Only newer measures are stored
     if ($lastdatetime == null || $lastdatetime < $datetime)
     {
-      $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1, value2, value3)
-      VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclass."', 1, '".$record['lat']."', '".$record['lng']."', '".$record['sat']."');";    
-  
-      $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
-      VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasslong."', 2, '".$record['lng']."');";
+      if ($record['sat'] != 0)
+      {
+        $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1, value2, value3)
+        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclass."', 1, '".$record['lat']."', '".$record['lng']."', '".$record['sat']."');";
+        
+        $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
+        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasslong."', 2, '".$record['lng']."');";
+      }
       
       $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
       VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasssat."', 3, '".$record['sat']."');";

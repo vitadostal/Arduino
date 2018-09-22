@@ -17,6 +17,12 @@ class Measure
 	public $text1;
 	public $text2;
 	public $text3;
+  private static $condition;
+  
+  public static function setMinSatellites($db, $sat)
+  {
+    self::$condition = ' AND value3 > '. mysqli_real_escape_string($db->conn, $sat);
+  }
 
 	public function fromDataRow(array $dataRow)
 	{
@@ -111,7 +117,7 @@ class Measure
     $dataset = $db->getByCondition(
       "measure",
       "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
-      "class='$class' AND timestamp > DATE_SUB(NOW(), INTERVAL $minutes MINUTE) AND ". Database::whereArray("sensor", $sensors),      
+      "class='$class' AND timestamp > DATE_SUB(NOW(), INTERVAL $minutes MINUTE) AND ". Database::whereArray("sensor", $sensors). " ". self::$condition,      
       "timestamp DESC, sensor ASC, field ASC");     
 
 		$result = array();
@@ -132,7 +138,7 @@ class Measure
     $dataset = $db->getByCondition(
       "measure",
       "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
-      "class='$class' AND timestamp >= '$from' AND timestamp <= '$to' AND ". Database::whereArray("sensor", $sensors),      
+      "class='$class' AND timestamp >= '$from' AND timestamp <= '$to' AND ". Database::whereArray("sensor", $sensors). " ". self::$condition,      
       "timestamp DESC, sensor ASC, field ASC");     
 
 		$result = array();
@@ -150,7 +156,7 @@ class Measure
     $whereArray = array();
     foreach ($sensors as $sensor)
     {
-      $whereArray[] = "class='$class' AND sensor='$sensor'";  
+      $whereArray[] = "class='$class' AND sensor='$sensor' ". self::$condition;  
     }
     
     $dataset = $db->getUnionByCondition(

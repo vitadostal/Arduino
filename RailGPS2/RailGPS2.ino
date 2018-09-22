@@ -30,6 +30,7 @@ char wifiPasswd[20]      = "<from-eeprom>";           //Wireless network passwor
 #define bootstrap 0                                   //initial programming of GPS module
 #define reportwifi 0                                  //report measures via WiFi
 #define reportgprs 1                                  //report measures via GPRS
+#define report0sat 1                                  //save unsuccessful measures
 #define sleep 20                                      //sleep interval for GPS module [s]
 #define interval 30                                   //interval between measures [s]
 #define shortinterval 10                              //interval between measures after GPRS sent [s]
@@ -59,6 +60,11 @@ const char UBLOX_INIT[] PROGMEM = {
   //0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0x64, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7A, 0x12,             //Refresh 10Hz
   //0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xC8, 0x00, 0x01, 0x00, 0x01, 0x00, 0xDE, 0x6A,             //Refresh 5Hz
   //0xB5, 0x62, 0x06, 0x08, 0x06, 0x00, 0xE8, 0x03, 0x01, 0x00, 0x01, 0x00, 0x01, 0x39,             //Refresh 1Hz
+  0xB5, 0x62, 0x06, 0x3E, 0x3C, 0x00, 0x00, 0x00, 0x20, 0x07, 0x00, 0x08, 0x10, 0x00, 0x01, 0x00,   //GNSS config
+  0x01, 0x01, 0x01, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01, 0x02, 0x04, 0x08, 0x00, 0x01, 0x00,
+  0x01, 0x01, 0x03, 0x08, 0x10, 0x00, 0x00, 0x00, 0x01, 0x01, 0x04, 0x00, 0x08, 0x00, 0x00, 0x00,
+  0x01, 0x01, 0x05, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x01, 0x06, 0x08, 0x0E, 0x00, 0x01, 0x00,
+  0x01, 0x01, 0x2F, 0xA1
 };
 
 struct NAV_PVT {
@@ -246,9 +252,10 @@ void loop()
   }
   if (pvt.fixType > 1)
   {
+    //Store successful measure
     SPIFFS.begin();
     loadFlashFile();
-    updateFlashMemory();
+    updateFlashMemory(1);
     saveFlashFile();
     SPIFFS.end();
 
@@ -256,15 +263,18 @@ void loop()
 
     if ((flash[last]) % modulo == 1)
     {
+      //Send successful measure
       if (beeper) beep(100);
       if (reportwifi)
       {
+        //Send over Wifi
         connectWifi();
         for (int i = 0; i < cycles / message; i++) if (messages[i]) postDataWifi(i);
         WiFi.mode(WIFI_OFF);
       }
       if (reportgprs)
       {
+        //Send over GSM
         if (connectGPRS()) postDataGPRS();
         disconnectGPRS();
         sweetDreams(shortinterval);
@@ -272,12 +282,23 @@ void loop()
     }
     else
     {
+      //Nothing sent
       if (beeper) beep(1);
     }
   }
   else
   {
+    //Unsuccessful measure
     if (bootstrap) bootstrapUblox();
+    if (report0sat)
+    {
+      //Store unsuccessful measure
+      SPIFFS.begin();
+      loadFlashFile();
+      updateFlashMemory(0);
+      saveFlashFile();
+      SPIFFS.end();
+    }
   }
 
   sweetDreams(interval);
@@ -405,7 +426,7 @@ void formatFlashFile()
   SPIFFS.format();
 }
 
-void updateFlashMemory()
+void updateFlashMemory(byte realdata)
 {
   unsigned long dt_time =
     pvt.second
@@ -420,10 +441,20 @@ void updateFlashMemory()
   if (flash[last] < 0 || flash[last] >= cycles) flash[last] = 0;
   int pointer = flash[last] * packet;
 
-  memcpy(&flash[pointer + 0], &dt, 4);
-  memcpy(&flash[pointer + 4], &pvt.numSV, 1);
-  memcpy(&flash[pointer + 5], &pvt.lon, 4);
-  memcpy(&flash[pointer + 9], &pvt.lat, 4);
+  if (realdata)  
+  {
+    memcpy(&flash[pointer + 0], &dt, 4);
+    memcpy(&flash[pointer + 4], &pvt.numSV, 1);
+    memcpy(&flash[pointer + 5], &pvt.lon, 4);
+    memcpy(&flash[pointer + 9], &pvt.lat, 4);
+  }
+  else
+  {
+    memcpy(&flash[pointer + 0], &dt, 4);
+    memset(&flash[pointer + 4], 0, 1);
+    memset(&flash[pointer + 5], 0, 4);
+    memset(&flash[pointer + 9], 0, 4);
+  }
 
   Serial.print("Cycle: ");
   Serial.print(flash[last]);

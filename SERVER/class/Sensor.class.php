@@ -104,5 +104,10 @@ class Sensor
     
     return $object;
   }
-
+  
+  public static function remap($sensor)
+  {
+    if (isset(Config::$devicemap[$sensor])) return Config::$devicemap[$sensor];
+    return $sensor;
+  }
 }

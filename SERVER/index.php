@@ -233,14 +233,17 @@
   <div id="tabs-7">
     <div id="target-map">Data se načítají...   
       <script>
-         $('div#target-map').load('tab6_map.php?<?php print Utils::sensorQuery(Params::$sensors) ?>&date=<?php print Params::$date_czech ?>');
+        setInterval( function() {
+          $('div#target-map').load('tab6_map.php?<?php print Utils::sensorQuery(Params::$sensors) ?>&date=<?php print Params::$date_czech ?>');
+        }, 300000);
+        $('div#target-map').load('tab6_map.php?<?php print Utils::sensorQuery(Params::$sensors) ?>&date=<?php print Params::$date_czech ?>');
       </script>
     </div>  
   </div>      
 
 </div>
 
-<p class='footer'>© 2017 Vítězslav Dostál</p>
+<p class='footer'>© 2017&ndash;<?php print date("Y") ?> Vítězslav Dostál</p>
 
 </body>  
 </html>

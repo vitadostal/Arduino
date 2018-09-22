@@ -1,7 +1,8 @@
 <?php
 
 //Load constants DB_LOGIN, DB_PASSWD, API_KEY, PRG_PASSWD,
-//TEMP_SENSOR_OUT, TEMP_CLASS_OUT, HMDT_SENSOR_OUT, HMDT_CLASS_OUT, PRES_SENSOR_OUT, PRES_CLASS_OUT
+//               SENSOR_OUT, TEMP_CLASS_OUT, HMDT_SENSOR_OUT, HMDT_CLASS_OUT, PRES_SENSOR_OUT, PRES_CLASS_OUT,
+//               GOOGLE_MAPS_KEY
 include "/home/vdostal/private_html/arduino.php";
 
 //Inline constatns
@@ -32,8 +33,35 @@ class Config
   public static $defaultmax = DEF_MAX;
   public static $hysteresis = HYSTERESIS;
   
-  public static $gpsclass = GPS_CLASS;  
+  public static $gpsclass = GPS_CLASS;
   public static $gpsclasslong = GPS_CLASS_LONG;
   public static $gpsclasssat = GPS_CLASS_SAT;
   public static $gpsclassvcc = GPS_CLASS_VCC;
+  
+  public static $gmapskey = GOOGLE_MAPS_KEY;
+  public static $devicemap = array();
 }
+
+//Sensors can me redefined here
+Config::$devicemap = array(
+  "RTD01" => "RTR01",
+  "RTD02" => "RTR02",
+  "RTD03" => "RTR03",
+  "RTD04" => "RTR04",
+  "RTD05" => "RTR05",
+  "RTD06" => "RTR06",
+  "RTD07" => "RTR07",
+  "RTD08" => "RTR08",
+  "RTD09" => "RTR09",
+  "RTD10" => "RTR10",
+  "RTD11" => "RTR11",
+  "RTD12" => "RTR12",
+  "RTD13" => "RTR13",
+  "RTD14" => "RTR14",
+  "RTD15" => "RTR15",
+  "RTD16" => "RTR16",
+  "RTD17" => "RTR17",
+  "RTD18" => "RTR18",
+  "RTD19" => "RTR19",
+  "RTD20" => "RTR20",
+);
