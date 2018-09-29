@@ -16,8 +16,8 @@
       }              
     })
       .done(function(data) { 
-        if (data === "!PASSWD") dialogError.dialog( "open" );
-                           else dialogSuccess.dialog( "open" );
+        if (data === "!PASSWD") dialogThermoError.dialog( "open" );
+                           else dialogThermoSuccess.dialog( "open" );
       });    
   }
   
@@ -31,8 +31,8 @@
       }              
     })
       .done(function(data) { 
-        if (data === "!PASSWD") dialogError.dialog( "open" );
-                           else dialogSuccess.dialog( "open" );
+        if (data === "!PASSWD") dialogThermoError.dialog( "open" );
+                           else dialogThermoSuccess.dialog( "open" );
       });    
   }
   
@@ -46,31 +46,30 @@
       }              
     })
       .done(function(data) { 
-        if (data === "!PASSWD") dialogError.dialog( "open" );
-                           else dialogSuccess.dialog( "open" );
+        if (data === "!PASSWD") dialogThermoError.dialog( "open" );
+                           else dialogThermoSuccess.dialog( "open" );
       });    
   }
   
-  dialogError = $( "#program-error" ).dialog({
+  dialogThermoError = $( "#thermo-error" ).dialog({
     width: 400,
     autoOpen: false,
     modal: true,
     buttons: {
       "Zavřít": function() {
-        dialogError.dialog( "close" );
+        dialogThermoError.dialog( "close" );
         $( "#thermopass" ).val("");
       }
     },
   });
   
-  dialogSuccess = $( "#program-success" ).dialog({
+  dialogThermoSuccess = $( "#thermo-success" ).dialog({
     width: 400,
     autoOpen: false,
     modal: true,
-    close: function() {reloadMe(); },
     buttons: {
       "Zavřít": function() {
-        dialogSuccess.dialog( "close" );
+        dialogThermoSuccess.dialog( "close" );
         reloadMe();
       }
     },
@@ -115,6 +114,7 @@
     print '</tr>';
 
     $lastid = -1;
+    $manual = 2;
     
     for ($minute = 0; $minute < 1440; $minute++)    
     {
@@ -125,6 +125,8 @@
           if ($lastid != $program->id) //Already displayed?
           {
             $lastid = $program->id;
+            if ($program->title == Config::$poweroff) $manual = 0;
+            if ($program->title == Config::$poweron) $manual = 1;
             
             print '<tr>';
               print '<td>';
@@ -179,9 +181,9 @@
 
 <p>
   <input class="input-passwd ui-button ui-widget ui-corner-all" id="thermopass" type="password" placeholder="Heslo" />
-  <button class="ui-button ui-widget ui-corner-all" onclick="program_off()"     >✋ Vypnout topení</button>
-  <button class="ui-button ui-widget ui-corner-all" onclick="program_control()" >✿ Řídit programem </button>
-  <button class="ui-button ui-widget ui-corner-all" onclick="program_on()"      >➽ Zapnout topení</button>
+  <button class="ui-button <?php if ($manual == 0) print "ui-state-active" ?> ui-widget ui-corner-all" onclick="program_off()">✋ Vypnout topení</button>
+  <button class="ui-button <?php if ($manual == 2) print "ui-state-active" ?> ui-widget ui-corner-all" onclick="program_control()">✿ Řídit programem </button>
+  <button class="ui-button <?php if ($manual == 1) print "ui-state-active" ?> ui-widget ui-corner-all" onclick="program_on()">➽ Zapnout topení</button>
   na
   <input class="input-temp ui-button ui-widget ui-corner-all" type="number" name="max" id="max" value="<?php print $programPowerOn->max ?>" min="-50" max="50" step="0.1" />
   °C
@@ -189,14 +191,14 @@
 
 <!-- ERROR -------------------------------------------------------------------->
 
-<div id="program-error" title="⛔ Chyba">
+<div id="thermo-error" title="⛔ Chyba">
   <p>Bylo zadáno špatné heslo!</p>
 </div>
 
 <!-- SUCCESS ------------------------------------------------------------------>
 
-<div id="program-success" title="✔ Výsledek">
-  <p>Termostat byl úspěšně přeprogramován</p>
+<div id="thermo-success" title="✔ Výsledek">
+  <p>Manuální mód byl úspěšně pozměněn</p>
 </div>
 
 <!-- END ---------------------------------------------------------------------->    

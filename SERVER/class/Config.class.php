@@ -1,8 +1,8 @@
 <?php
 
 //Load constants DB_LOGIN, DB_PASSWD, API_KEY, PRG_PASSWD,
-//               SENSOR_OUT, TEMP_CLASS_OUT, HMDT_SENSOR_OUT, HMDT_CLASS_OUT, PRES_SENSOR_OUT, PRES_CLASS_OUT,
-//               GOOGLE_MAPS_KEY
+//               SENSOR_OUT, TEMP_CLASS_OUT, HMDT_SENSOR_OUT, HMDT_CLASS_OUT, PRES_SENSOR_OUT, PRES_CLASS_OUT, SENSOR_IN, TEMP_CLASS_IN,
+//               GOOGLE_MAPS_KEY, IP_ADDRESS
 include "/home/vdostal/private_html/arduino.php";
 
 //Inline constatns
@@ -21,12 +21,11 @@ class Config
 {
   public static $dbname = DB_LOGIN;
   public static $dbuser = DB_LOGIN;
-  public static $dbpasswd = DB_PASSWD;    
-  
+  public static $dbpasswd = DB_PASSWD;      
   public static $key = API_KEY;
   public static $passwd = PRG_PASSWD;
+  
   public static $wrongpasswd = WRONG_PASSWD;
-
   public static $poweron = POWER_ON;
   public static $poweroff = POWER_OFF;
 
@@ -38,7 +37,17 @@ class Config
   public static $gpsclasssat = GPS_CLASS_SAT;
   public static $gpsclassvcc = GPS_CLASS_VCC;
   
+  public static $tempsensor_in = TEMP_SENSOR_IN;
+  public static $tempclass_in = TEMP_CLASS_IN;
+	public static $tempsensor_out = TEMP_SENSOR_OUT;
+  public static $tempclass_out = TEMP_CLASS_OUT;
+	public static $hmdtsensor_out = HMDT_SENSOR_OUT;
+  public static $hmdtclass_out = HMDT_CLASS_OUT;
+	public static $pressensor_out = PRES_SENSOR_OUT;
+  public static $presclass_out = PRES_CLASS_OUT;
+
   public static $gmapskey = GOOGLE_MAPS_KEY;
+  public static $ipaddress = IP_ADDRESS;
   public static $devicemap = array();
 }
 

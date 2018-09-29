@@ -10,7 +10,7 @@
 char wifiSSID[20]   = "";
 char wifiPasswd[20] = "";
 char* server        = "";
-char* filename      = "";
+char* filename      = "/fetch/power.txt";
 int interval        = 30;
 
 int manual = 2;
@@ -89,8 +89,11 @@ void evaluate()
       turnOn(blue); break;
     case 2:
       String data = readFile();
-      if (data.indexOf("<ON>") != -1) turnOn(blue);
-      if (data.indexOf("<OFF>") != -1) turnOff(blue);
+      if (data.indexOf("<ON>") != -1) {turnOn(blue); break;}
+      if (data.indexOf("<OFF>") != -1) {turnOff(blue); break;}
+      turnOn(red);
+      delay(500);
+      turnOff(red);
       break;
   }
   turnOn(green);
@@ -98,6 +101,7 @@ void evaluate()
 
 void connectWifi()
 {
+  WiFi.mode(WIFI_AP_STA);
   WiFi.begin(wifiSSID, wifiPasswd);
   while (WiFi.status() != WL_CONNECTED) delay(500);
 }

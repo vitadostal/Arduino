@@ -6,7 +6,7 @@
   $database = new Database();
   $database->connect();
 
-  if (!isset($_POST['thermopass']) || $_POST['thermopass'] != Config::$passwd) {print Config::$wrongpasswd; exit(); }; 
+  if (!isset($_POST['thermopass']) || ($_POST['thermopass'] != Config::$passwd && $_SERVER['REMOTE_ADDR'] != Config::$ipaddress)) {print Config::$wrongpasswd; exit(); }; 
   
   //Import
   $sql = "

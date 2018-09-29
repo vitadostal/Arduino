@@ -41,7 +41,7 @@
   hr {border: none; border-top: 1px solid #ccc;}
 
   h1 {font-size: 22px; font-family: sans-serif; text-transform: uppercase;
-      border-bottom: 2px solid black; text-align: center;}
+      border-bottom: 2px solid black; text-align: left;}
   
   table.default th, table.default td
   {
@@ -91,10 +91,10 @@
   .floatleft {float: left;}
   .floatright {float: right;}
   .clear {clear: both;}
-  .colorbox {clear: both; margin-right: 10px; width: 20px; height: 20px;}  
+  .colorbox {clear: both; margin-right: 10px; width: 20px; height: 20px;}
   .colorbox-prog {margin-right: 10px; width: 20px; height: 20px; color: white; text-align: center;}
   
-  .vert2 {vertical-align: -2px;} 
+  .vert2 {vertical-align: -2px;}
   
   .invisible {position:absolute; top:-1000px;}
   

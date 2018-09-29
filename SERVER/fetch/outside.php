@@ -11,9 +11,9 @@
   $database->connect();
 
   //Objects
-  $measureTemp = Measure::loadLastMeasure($database, TEMP_SENSOR_OUT, TEMP_CLASS_OUT);
-  $measureHmdt = Measure::loadLastMeasure($database, HMDT_SENSOR_OUT, HMDT_CLASS_OUT);
-  $measurePres = Measure::loadLastMeasure($database, PRES_SENSOR_OUT, PRES_CLASS_OUT);
+  $measureTemp = Measure::loadLastMeasure($database, Config::$tempsensor_out, Config::$tempclass_out);
+  $measureHmdt = Measure::loadLastMeasure($database, Config::$hmdtsensor_out, Config::$hmdtclass_out);
+  $measurePres = Measure::loadLastMeasure($database, Config::$pressensor_out, Config::$presclass_out);
 
   if (isset($measureTemp->value1)) print $measureTemp->value1;
   print ';';  

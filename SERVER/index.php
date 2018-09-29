@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>ARDUINO | Sensor Reading</title>
+  <title>ARDUINO | vitadostal.cz</title>
   
   <link rel="stylesheet" type="text/css" href="arduino.css?version=4">
   <link rel="stylesheet" href="/jquery/jquery-ui.css">
