@@ -32,6 +32,7 @@ char wifiPasswd[20]      = "<from-eeprom>";           //Wireless network passwor
 #define reportgprs 1                                  //report measures via GPRS
 #define report0sat 1                                  //save unsuccessful measures
 #define sleep 20                                      //sleep interval for GPS module [s]
+#define sleepsat 10                                   //number of satellites to enable sleeping
 #define interval 30                                   //interval between measures [s]
 #define shortinterval 10                              //interval between measures after GPRS sent [s]
 
@@ -259,32 +260,8 @@ void loop()
     saveFlashFile();
     SPIFFS.end();
 
-    if (sleep && pvt.numSV >= 10) sleepUblox();
-
-    if ((flash[last]) % modulo == 1)
-    {
-      //Send successful measure
-      if (beeper) beep(100);
-      if (reportwifi)
-      {
-        //Send over Wifi
-        connectWifi();
-        for (int i = 0; i < cycles / message; i++) if (messages[i]) postDataWifi(i);
-        WiFi.mode(WIFI_OFF);
-      }
-      if (reportgprs)
-      {
-        //Send over GSM
-        if (connectGPRS()) postDataGPRS();
-        disconnectGPRS();
-        sweetDreams(shortinterval);
-      }
-    }
-    else
-    {
-      //Nothing sent
-      if (beeper) beep(1);
-    }
+    //Sleep Ublox when a lot of satellites found
+    if (sleep && pvt.numSV >= sleepsat) sleepUblox();
   }
   else
   {
@@ -299,6 +276,31 @@ void loop()
       saveFlashFile();
       SPIFFS.end();
     }
+  }
+
+  //Send results
+  if ((flash[last]) % modulo == 1)
+  {
+    if (beeper) beep(100);
+    if (reportwifi)
+    {
+      //Send over Wifi
+      connectWifi();
+      for (int i = 0; i < cycles / message; i++) if (messages[i]) postDataWifi(i);
+      WiFi.mode(WIFI_OFF);
+    }
+    if (reportgprs)
+    {
+      //Send over GSM
+      if (connectGPRS()) postDataGPRS();
+      disconnectGPRS();
+      sweetDreams(shortinterval);
+    }
+  }
+  else
+  {
+    //Nothing sent
+    if (beeper) beep(1);
   }
 
   sweetDreams(interval);
