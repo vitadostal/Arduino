@@ -15,6 +15,7 @@ define("GPS_CLASS", "A7_LAT");
 define("GPS_CLASS_LONG", "A7_LONG");
 define("GPS_CLASS_SAT", "A7_SAT");
 define("GPS_CLASS_VCC", "A7_VCC");
+define("GPS_CLASS_BAT", "A7_BAT");
 define("TIME_STEP", 5);
 
 class Config
@@ -36,6 +37,7 @@ class Config
   public static $gpsclasslong = GPS_CLASS_LONG;
   public static $gpsclasssat = GPS_CLASS_SAT;
   public static $gpsclassvcc = GPS_CLASS_VCC;
+  public static $gpsclassbat = GPS_CLASS_BAT;
   
   public static $tempsensor_in = TEMP_SENSOR_IN;
   public static $tempclass_in = TEMP_CLASS_IN;

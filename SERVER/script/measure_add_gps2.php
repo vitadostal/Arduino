@@ -9,12 +9,13 @@
   $database->connect();
     
   $data = file_get_contents('php://input');
-  $blocks = explode('|', $data, 4);
+  $blocks = explode('|', $data, 5);
   
   $key = $blocks[0];
   $sensor = $blocks[1];
-  $voltage = round($blocks[2] / 1024, 2) + 0.3;
-  $packet = $blocks[3];
+  $voltage = round($blocks[2] / 1000, 2);
+  $battery = round($blocks[3], 2);
+  $packet = $blocks[4];
   
   if (!isset ($key) || $key != Config::$key) exit();
   if (isset ($sensor)) $sensor = mysqli_real_escape_string($database->conn, $sensor); else exit();
@@ -127,7 +128,10 @@
       if ($lastid == $record['id'])
       {
         $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
-        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";      
+        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";
+
+        $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
+        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclassbat."', 4, '$battery');";
       }
     }
   }

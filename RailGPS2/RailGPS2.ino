@@ -5,15 +5,14 @@
 #include <ESP8266WiFi.h>
 #include <EEPROM.h>
 #include <FS.h>
-ADC_MODE(ADC_VCC);
 #define gpsbaud 9600
 #define beeper 0
 #define gpstx 4
 #define gpsrx 5
 #define simbaud 38400
 #define simtx 12
-#define simrx 13
-#define simreset 14
+#define simrx 14
+#define simreset 13
 
 char sensor[20]          = "<from-eeprom>";           //Sensor indentification
 char server[40]          = "<from-eeprom>";           //Processing server
@@ -31,7 +30,8 @@ char wifiPasswd[20]      = "<from-eeprom>";           //Wireless network passwor
 #define reportwifi 0                                  //report measures via WiFi
 #define reportgprs 1                                  //report measures via GPRS
 #define report0sat 1                                  //save unsuccessful measures
-#define sleep 20                                      //sleep interval for GPS module [s]
+#define powerdownmodem 1                              //power down modem in each cycle
+#define sleep 0                                       //sleep interval for GPS module [s]
 #define sleepsat 10                                   //number of satellites to enable sleeping
 #define interval 30                                   //interval between measures [s]
 #define shortinterval 10                              //interval between measures after GPRS sent [s]
@@ -41,7 +41,8 @@ const char messages[] = {0, 0, 0, 0, 1, 1};           //map of chunks sent in on
 SoftwareSerial ublox(gpsrx, gpstx);
 SoftwareSerial sim800(simrx, simtx);
 uint8_t flash[flashSize];
-String reply;
+String reply, batlevel, batvolt;
+char reason;
 const unsigned char terminal[2] = { 0x1a, 0x00 };
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 
@@ -227,11 +228,27 @@ void sweetDreams(int period)
   ESP.deepSleep(period * 1000000);
 }
 
+int getReset()
+{
+  //5 deep sleep, 6 external reset
+  rst_info *resetInfo;
+  resetInfo = ESP.getResetInfoPtr();
+  return ((*resetInfo).reason);
+}
+
+bool isReset()
+{
+  if (reason + 65 == 71) return true;
+  return false;
+}
+
 void setup()
 {
   WiFi.mode(WIFI_OFF);
   memset(&flash, 255, flashSize);
   Serial.begin(115200);
+  reason = getReset();
+  if (isReset() && powerdownmodem) resetModem();
   readMemory();
   ublox.begin(gpsbaud);
   sim800.begin(simbaud);
@@ -278,8 +295,15 @@ void loop()
     }
   }
 
+  //Prepare modem
+  if (powerdownmodem && (flash[last]) % modulo == 0)
+  {
+    Serial.println("Modem reset");
+    resetModem();    
+  }
+  
   //Send results
-  if ((flash[last]) % modulo == 1)
+  if (((flash[last]) % modulo == 1) || isReset())
   {
     if (beeper) beep(100);
     if (reportwifi)
@@ -316,6 +340,7 @@ bool connectGPRS()
   processCommand("AT+COPS?", "", 5);
   processCommand("AT+CGATT?", "", 5);
   processCommand("AT+CSQ", "", 5);
+  processCommand("AT+CBC", "+CBC:", 5);
 
   status = processCommand("AT+CSTT=\"internet\",\"\",\"\"", "OK", 5);
   if (!status)
@@ -342,7 +367,8 @@ void postDataGPRS()
   String params;
   params += String(key) + '|';
   params += String(sensor) + '|';
-  params += String(ESP.getVcc()) + '|';
+  params += batvolt + '|';
+  params += batlevel + '|';
 
   String request;
   request += "POST /script/measure_add_gps2.php HTTP/1.1\r\n";
@@ -378,7 +404,16 @@ void disconnectGPRS()
 {
   processCommand("AT+CIPCLOSE", "", 1);
   processCommand("AT+CIPSHUT", "", 1);
-  processCommand("AT+CSCLK=2", "", 5);
+
+  if (powerdownmodem)
+  {
+    delay(1000);
+    processCommand("AT+CPOWD=1", "", 1);
+  }
+  else
+  {
+    processCommand("AT+CSCLK=2", "", 5);
+  }
 }
 
 void postDataWifi(int chunk)
@@ -392,7 +427,8 @@ void postDataWifi(int chunk)
     String params;
     params += String(key) + '|';
     params += String(sensor) + '|';
-    params += String(ESP.getVcc()) + '|';
+    params += batvolt + '|';
+    params += batlevel + '|';
 
     String request;
     request += "POST /script/measure_add_gps2.php HTTP/1.1\r\n";
@@ -572,7 +608,17 @@ bool processCommand(String command, String expect, int timeout)
   {
     yield();
     reply = readModem();
-    if (reply.indexOf(expect) != -1) return true;
+    if (reply.indexOf(expect) != -1)
+    {
+      if (expect == "+CBC:")
+      {
+        reply = reply.substring(reply.indexOf(",")+1);
+        int commapos = reply.indexOf(",")+1; 
+        batlevel = reply.substring(0, commapos-1);
+        batvolt = reply.substring(commapos, commapos+4);
+      }
+      return true;
+    }
   }
   return false;
 }
