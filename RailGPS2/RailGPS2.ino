@@ -30,8 +30,8 @@ char wifiPasswd[20]      = "<from-eeprom>";           //Wireless network passwor
 #define reportwifi 0                                  //report measures via WiFi
 #define reportgprs 1                                  //report measures via GPRS
 #define report0sat 1                                  //save unsuccessful measures
-#define powerdownmodem 1                              //power down modem in each cycle
-#define sleep 0                                       //sleep interval for GPS module [s]
+#define powerdownmodem 0                              //power down modem in each cycle
+#define sleep 20                                      //sleep interval for GPS module [s]
 #define sleepsat 10                                   //number of satellites to enable sleeping
 #define interval 30                                   //interval between measures [s]
 #define shortinterval 10                              //interval between measures after GPRS sent [s]
@@ -258,6 +258,7 @@ void loop()
 {
   Serial.println();
   Serial.println("====================");
+  Serial.println(ESP.getResetReason());
 
   readUblox(3000);
   if (pvt.fixType < 2) {
