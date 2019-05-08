@@ -168,15 +168,15 @@ bool processGPS() {
   return false;
 }
 
-static void readUblox(unsigned long ms)
+static void readUblox(int ms)
 {
   unsigned long start = millis();
   do
   {
     if (processGPS()) return;
-    yield;
+    delay(5);
   }
-  while (millis() - start < ms);
+  while (millis() < start + ms);
 }
 
 void beep(int ms)
@@ -262,12 +262,12 @@ void loop()
 
   readUblox(3000);
   if (pvt.fixType < 2) {
-    readUblox(3000);
     Serial.println("Acquiring location...");
+    readUblox(3000);
   }
   if (pvt.fixType < 2) {
-    readUblox(3000);
     Serial.println("Acquiring location...");
+    readUblox(3000);
   }
   if (pvt.fixType > 1)
   {
