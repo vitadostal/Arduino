@@ -328,6 +328,16 @@ void loop()
     if (beeper) beep(1);
   }
 
+  //Check whether modem is stuck
+  if ((flash[last]) % modulo == 2)
+  {
+    if (!processCommand("AT", "OK", 1))
+    {
+      Serial.println("Modem reset");
+      resetModem();
+    }
+  }
+
   sweetDreams(interval);
 }
 
