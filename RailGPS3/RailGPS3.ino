@@ -16,11 +16,10 @@
 
 #define cycles 39                                          //Measures stored in flash memory
 #define packet 13                                          //Size of one measure in bytes
-#define last 507                                           //cycles * packet
-#define modulo 5                                           //number of measures when sending is triggered
+#define modulo 4                                           //number of measures when sending is triggered
 #define sleepsat 8                                         //number of satellites to enable GPS sleeping
-#define sleep 50                                           //sleep interval for GPS module [s]
-#define interval 60                                        //interval between measures [s]
+#define before 12                                          //wake Ublox before measure [s]
+#define interval 180                                       //interval between measures [s]
 
 const char sensor[] PROGMEM = "";                          //Sensor indentification
 const char server[] PROGMEM = "";                          //Processing server
@@ -68,6 +67,7 @@ const char *const string_table[] PROGMEM = {c0, c1, c2, c3, c4, c5, c6, c7, c8, 
                                             c31, c32, c33, c34, c35, c36, c37, c38
                                            };
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
+const unsigned long wait = interval;
 char buffer[64];
 char voltage[4];
 bool fail = false;
@@ -75,6 +75,7 @@ bool modify = false;
 bool success = false;
 byte current = 0;
 byte comma = 0;
+unsigned long timer;
 
 SoftwareSerial serial(serrx, sertx);
 SoftwareSerial ublox(gpsrx, gpstx);
@@ -107,7 +108,7 @@ struct NAV_PVT {
   unsigned long hAcc;          // Horizontal Accuracy Estimate (mm)
   unsigned long vAcc;          // Vertical Accuracy Estimate (mm)
 
-  long velN;                   // NED north velocity (mm/s)
+  /*long velN;                 // NED north velocity (mm/s)
   long velE;                   // NED east velocity (mm/s)
   long velD;                   // NED down velocity (mm/s)
   long gSpeed;                 // Ground Speed (2-D) (mm/s)
@@ -116,7 +117,7 @@ struct NAV_PVT {
   unsigned long headingAcc;    // Heading Accuracy Estimate
   unsigned short pDOP;         // Position dilution of precision
   short reserved2;             // Reserved
-  unsigned long reserved3;     // Reserved
+  unsigned long reserved3;     // Reserved*/
 };
 
 NAV_PVT pvt;
@@ -194,7 +195,8 @@ void sleepUblox()
 {
   //UBX-RXM-PMREQ
   unsigned char data[] = {0xB5, 0x62, 0x02, 0x41, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
-  unsigned long num = sleep;
+  unsigned long num = interval;
+  num -= before;
   num = num * 1000;
   memcpy(&data[6], &num, 4);
   setChecksum(data, sizeof(data));
@@ -206,7 +208,7 @@ void sleepUblox()
   }
 
   prepare(24); serial.print(buffer); //Ublox sleep:
-  serial.println(sleep);
+  serial.println(interval - before);
 }
 
 void sweetDreams(unsigned long int period)
@@ -222,10 +224,20 @@ void setup()
   serial.println();
   ublox.begin(gpsbaud);
   sim800.begin(simbaud);
+  updateCurrent();
+  measure();
 }
 
 void loop()
 {
+  delay(100);
+  if (millis() - timer > wait * 1000) measure();
+}
+
+void measure()
+{
+  timer = millis();
+  
   readUblox(3000);
   if (pvt.fixType < 2) {
     prepare(38); serial.println(buffer); //GPS lost
@@ -241,7 +253,7 @@ void loop()
     updateFlashMemory(1);
 
     //Sleep Ublox when a lot of satellites found
-    if (sleep && pvt.numSV >= sleepsat) sleepUblox();
+    if (sleepsat > 0 && pvt.numSV >= sleepsat) sleepUblox();
   }
   else
   {
@@ -250,15 +262,7 @@ void loop()
   }
 
   //Send results
-  if (current % modulo == 1)
-  {
-    gprs();
-    sweetDreams(interval - 10);
-  }
-  else
-  {
-    sweetDreams(interval);
-  }
+  if (current % modulo == 1) gprs();
 }
 
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
@@ -355,9 +359,9 @@ void gprs() {
   prepare(8);  communicate(); //AT+CIPQSEND=1
   prepare(7);  communicate(); //AT+CIPSEND=size
   if (!fail) {
-    delay(3000);
+    delay(2000);
     trasmit();
-    delay(3000);
+    delay(2000);
   }
   prepare(32); communicate(); //AT+CIPSEND?
   prepare(33); communicate(); //AT+CIPCLOSE
@@ -468,4 +472,18 @@ void trasmit()
 
   prepare(17); sim800.print(buffer); //LINE
   prepare(17); sim800.print(buffer); //LINE
+}
+
+void updateCurrent()
+{
+  unsigned long dt;
+  unsigned long old = 0;
+
+  for (byte i = 0; i < cycles; i++)
+  {
+    unsigned int pointer = i * packet;
+    EEPROM_readAnything(pointer + 0, dt);
+    if (dt > old) current = i;
+    old = dt;
+  }
 }
