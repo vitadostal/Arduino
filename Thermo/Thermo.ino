@@ -23,7 +23,7 @@
 const String host_prefix     = "ESP8266";                 //Hostname prefix
 const char*  server          = "arduino.vitadostal.cz";   //Processing server
       String key             = "<from-eeprom>";           //API write key
-const String firmware        = "v1.18 / 11 Nov 2017";     //Firmware version
+const String firmware        = "v1.19 / 29 Jun 2019";     //Firmware version
 const int    offset          = 340;                       //EEPROM memory offset
 
       byte   interval        = 255; //255 = <from-eeprom> //Next measure (in minutes)
@@ -297,6 +297,27 @@ void setupWebServer()
     httpServer.send(200, "text/html", deviceStatus());
   });
 
+  httpServer.on("/sensor-0",      HTTP_GET, []() {writeMemory(364,48,48);});
+  httpServer.on("/sensor-1",      HTTP_GET, []() {writeMemory(364,48,49);});
+  httpServer.on("/sensor-2",      HTTP_GET, []() {writeMemory(364,48,50);});
+  httpServer.on("/sensor-3",      HTTP_GET, []() {writeMemory(364,48,51);});
+  httpServer.on("/sensor-4",      HTTP_GET, []() {writeMemory(364,48,52);});
+  httpServer.on("/sensor-5",      HTTP_GET, []() {writeMemory(364,48,53);});
+  httpServer.on("/sensor-6",      HTTP_GET, []() {writeMemory(364,48,54);});
+  httpServer.on("/sensor-7",      HTTP_GET, []() {writeMemory(364,48,55);});
+  httpServer.on("/sensor-8",      HTTP_GET, []() {writeMemory(364,48,56);});
+  httpServer.on("/sensor-9",      HTTP_GET, []() {writeMemory(364,48,57);});
+  httpServer.on("/sensor-10",     HTTP_GET, []() {writeMemory(364,49,48);});
+  httpServer.on("/sensor-11",     HTTP_GET, []() {writeMemory(364,49,49);});
+  httpServer.on("/sensor-12",     HTTP_GET, []() {writeMemory(364,49,50);});
+  httpServer.on("/sensor-13",     HTTP_GET, []() {writeMemory(364,49,51);});
+  httpServer.on("/sensor-14",     HTTP_GET, []() {writeMemory(364,49,52);});
+  httpServer.on("/sensor-15",     HTTP_GET, []() {writeMemory(364,49,53);});
+  httpServer.on("/sensor-16",     HTTP_GET, []() {writeMemory(364,49,54);});
+  httpServer.on("/sensor-17",     HTTP_GET, []() {writeMemory(364,49,55);});
+  httpServer.on("/sensor-18",     HTTP_GET, []() {writeMemory(364,49,56);});
+  httpServer.on("/sensor-19",     HTTP_GET, []() {writeMemory(364,49,57);});
+  
   httpServer.on("/display-on",    HTTP_GET, []() {writeMemory(482,1);});
   httpServer.on("/display-off",   HTTP_GET, []() {writeMemory(482,0);});
 
@@ -738,6 +759,12 @@ String mac2String(byte ar[]) {
     if (i < 5) s += ':';
   }
   return s;
+}
+
+void writeMemory(float addr, byte value, byte value2)
+{
+  EEPROM.write(addr, value2);
+  writeMemory(addr, value);
 }
 
 void writeMemory(float addr, byte value)
