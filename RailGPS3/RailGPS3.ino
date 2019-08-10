@@ -22,6 +22,8 @@
 #define sleepsat 8                                         //number of satellites to enable GPS sleeping
 #define before 14                                          //wake Ublox before measure [s]
 #define interval 121                                       //interval between measures [s]
+#define unsuccessful 0                                     //store 0 satellites
+#define buttons 0                                          //enable buttons
 
 const char sensor[] PROGMEM = "";                          //Sensor indentification
 const char server[] PROGMEM = "";                          //Processing server
@@ -65,10 +67,11 @@ const char c37[]    PROGMEM = "AT+CPOWD=1";
 const char c38[]    PROGMEM = "No GPS";
 const char c39[]    PROGMEM = "Measure button pressed";
 const char c40[]    PROGMEM = "Send button pressed";
+const char c41[]    PROGMEM = "Iteration: ";
 
 const char *const string_table[] PROGMEM = {c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, sensor, server, key,
                                             c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30,
-                                            c31, c32, c33, c34, c35, c36, c37, c38, c39, c40
+                                            c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41
                                            };
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 const unsigned long wait = interval;
@@ -78,6 +81,7 @@ bool fail = false;
 bool modify = false;
 bool success = false;
 byte current = 0;
+byte iterator = 0;
 byte comma = 0;
 unsigned long timer;
 
@@ -224,8 +228,8 @@ void sweetDreams(unsigned long int period)
 
 void setup()
 {
-  pinMode(btnmeasure, INPUT);
-  pinMode(btnsend, INPUT);
+  if (buttons) pinMode(btnmeasure, INPUT);
+  if (buttons) pinMode(btnsend, INPUT);
   serial.begin(serbaud);
   serial.println();
   ublox.begin(gpsbaud);
@@ -239,19 +243,22 @@ void loop()
   delay(100);
 
   //Early measure
-  if (digitalRead(btnmeasure) == LOW)
+  if (buttons)
   {
-    prepare(39); serial.println(buffer); //Measure button pressed
-    ublox.write(0xFF);
-    delay(10000);
-    measure();
-  }
-
-  //Early send
-  if (digitalRead(btnsend) == LOW)
-  {
-    prepare(40); serial.println(buffer); //Send button pressed
-    gprs();
+    if (digitalRead(btnmeasure) == LOW)
+    {
+      prepare(39); serial.println(buffer); //Measure button pressed
+      ublox.write(0xFF);
+      delay(10000);
+      measure();
+    }
+  
+    //Early send
+    if (digitalRead(btnsend) == LOW)
+    {
+      prepare(40); serial.println(buffer); //Send button pressed
+      gprs();
+    }
   }
 
   if (millis() - timer > wait * 1000) measure();
@@ -260,6 +267,11 @@ void loop()
 void measure()
 {
   timer = millis();
+
+  iterator++;
+  prepare(41); serial.print(buffer); //Iteration:
+  serial.println(iterator);
+  if (iterator < 0 || iterator >= modulo) iterator = 0;  
   
   readUblox(3000);
   if (pvt.fixType < 2) {
@@ -281,11 +293,14 @@ void measure()
   else
   {
     //Unsuccessful measure
-    updateFlashMemory(0);
+    if (unsuccessful) updateFlashMemory(0);
   }
 
   //Send results
-  if (current % modulo == 0) gprs();
+  if (iterator % modulo == 0) gprs();
+
+  //Reset structure
+  pvt.fixType = 0;
 }
 
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
