@@ -15,6 +15,7 @@
 #define simreset 0
 #define btnmeasure 7
 #define btnsend 8
+#define btssat 100
 
 #define cycles 39                                          //Measures stored in flash memory
 #define packet 13                                          //Size of one measure in bytes
@@ -22,7 +23,6 @@
 #define sleepsat 8                                         //number of satellites to enable GPS sleeping
 #define before 14                                          //wake Ublox before measure [s]
 #define interval 123                                       //interval between measures [s]
-#define unsuccessful 0                                     //store 0 satellites
 #define buttons 1                                          //enable buttons
 
 const char sensor[] PROGMEM = "";                          //Sensor indentification
@@ -65,8 +65,8 @@ const char c35[]    PROGMEM = "4200";
 const char c36[]    PROGMEM = "\",80";
 const char c37[]    PROGMEM = "AT+CPOWD=1";
 const char c38[]    PROGMEM = "No GPS";
-const char c39[]    PROGMEM = "Measure button pressed";
-const char c40[]    PROGMEM = "Send button pressed";
+const char c39[]    PROGMEM = "Measure button";
+const char c40[]    PROGMEM = "Send button";
 const char c41[]    PROGMEM = "Iteration: ";
 const char c42[]    PROGMEM = "AT+SAPBR=3,1,\"Contype\",\"GPRS\"";
 const char c43[]    PROGMEM = "AT+SAPBR=3,1,\"APN\",\"internet\"";
@@ -74,10 +74,11 @@ const char c44[]    PROGMEM = "AT+SAPBR=1,1";
 const char c45[]    PROGMEM = "AT+SAPBR=2,1";
 const char c46[]    PROGMEM = "AT+CIPGSMLOC=1,1";
 const char c47[]    PROGMEM = "AT+SAPBR=0,1";
+const char c48[]    PROGMEM = "Same coordinates";
 
 const char *const string_table[] PROGMEM = {c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, sensor, server, key,
                                             c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30,
-                                            c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47
+                                            c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48
                                            };
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 const unsigned long wait = interval;
@@ -92,6 +93,8 @@ bool bts = false;
 byte current = 0;
 byte iterator = 0;
 byte comma = 0;
+long lastlat = 0;
+long lastlon = 0;
 unsigned long timer;
 
 SoftwareSerial serial(serrx, sertx);
@@ -277,7 +280,6 @@ void measure()
 {
   timer = millis();
 
-  pvt.fixType = 0;
   iterator++;
   prepare(41); serial.print(buffer); //Iteration:
   serial.println(iterator);
@@ -285,26 +287,28 @@ void measure()
 
   readUblox(3000);
   if (pvt.fixType < 2) {
-    prepare(38); serial.println(buffer); //GPS lost
+    prepare(38); serial.println(buffer); //No GPS
     readUblox(3000);
   }
   if (pvt.fixType < 2) {
-    prepare(38); serial.println(buffer); //GPS lost
+    prepare(38); serial.println(buffer); //No GPS
     readUblox(3000);
   }
   if (pvt.fixType >= 2)
   {
     //Successful measure
-    updateFlashMemory(1);
-    signal = true;
+    if (!repeatingCoordinates())
+    {
+      updateFlashMemory(pvt.lon, pvt.lat);
 
-    //Sleep Ublox when a lot of satellites found
-    if (sleepsat > 0 && pvt.numSV >= sleepsat) sleepUblox();
-  }
-  else
-  {
-    //Unsuccessful measure
-    if (unsuccessful) updateFlashMemory(0);
+      //Sleep Ublox when a lot of satellites found
+      if (sleepsat > 0 && pvt.numSV >= sleepsat) sleepUblox();
+    }
+    else
+    {
+      prepare(48); //Same coordinates
+      serial.println(buffer);
+    }
   }
 
   //Send results
@@ -329,7 +333,7 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
   return i;
 }
 
-void updateFlashMemory(byte realdata)
+void updateFlashMemory(long lon, long lat)
 {
   unsigned long dt_time = pvt.hour;
   dt_time *= 3600;
@@ -345,30 +349,21 @@ void updateFlashMemory(byte realdata)
   unsigned int pointer = current;
   pointer *= packet;
 
-  if (realdata)
-  {
-    EEPROM_writeAnything(pointer + 0, dt);
-    EEPROM_writeAnything(pointer + 4, pvt.numSV);
-    EEPROM_writeAnything(pointer + 5, pvt.lon);
-    EEPROM_writeAnything(pointer + 9, pvt.lat);
-  }
-  else
-  {
-    EEPROM_writeAnything(pointer + 0, dt);
-    EEPROM_writeAnything(pointer + 4, 0);
-    EEPROM_writeAnything(pointer + 5, 0);
-    EEPROM_writeAnything(pointer + 9, 0);
-  }
+  EEPROM_writeAnything(pointer + 0, dt);
+  EEPROM_writeAnything(pointer + 4, pvt.numSV);
+  EEPROM_writeAnything(pointer + 5, lon);
+  EEPROM_writeAnything(pointer + 9, lat);
 
   prepare(26); serial.print(buffer); //Cycle:
   serial.print(current);
   prepare(27); serial.print(buffer); //lat:
-  serial.print(pvt.lat);
+  serial.print(lat);
   prepare(28); serial.print(buffer); //lng:
-  serial.print(pvt.lon);
+  serial.print(lon);
   prepare(29); serial.print(buffer); //sat:
   serial.println(pvt.numSV);
 
+  signal = true;
   current++;
   if (current < 0 || current >= cycles) current = 0;
 }
@@ -554,39 +549,55 @@ void BTSLocation()
   {
     if (buffer[i - 4] == 'L' && buffer[i - 3] == 'O' && buffer[i - 2] == 'C' && buffer[i - 1] == ':' && buffer[i] == ' ')
     {
-      pvt.lon = 0;
-      pvt.lon   += (buffer[i + 11] & 0xf) * 10;
-      pvt.lon   += (buffer[i + 10] & 0xf) * 100;
-      pvt.lon   += (buffer[i + 9]  & 0xf) * 1000;
-      pvt.lon   += (buffer[i + 8]  & 0xf) * 10000;
-      pvt.lon   += (buffer[i + 7]  & 0xf) * 100000;
-      pvt.lon   += (buffer[i + 6]  & 0xf) * 1000000;
-      pvt.lon   += (buffer[i + 4]  & 0xf) * 10000000;
-      pvt.lon   += (buffer[i + 3]  & 0xf) * 100000000;
+      pvt.year   = shift4(i + 23);
+      pvt.month  = shift2(i + 28);
+      pvt.day    = shift2(i + 31);
+      pvt.hour   = shift2(i + 34);
+      pvt.minute = shift2(i + 37);
+      pvt.second = shift2(i + 40);
+      pvt.numSV  = btssat;
 
-      pvt.lat = 0;
-      pvt.lat   += (buffer[i + 21] & 0xf) * 10;
-      pvt.lat   += (buffer[i + 20] & 0xf) * 100;
-      pvt.lat   += (buffer[i + 19] & 0xf) * 1000;
-      pvt.lat   += (buffer[i + 18] & 0xf) * 10000;
-      pvt.lat   += (buffer[i + 17] & 0xf) * 100000;
-      pvt.lat   += (buffer[i + 16] & 0xf) * 1000000;
-      pvt.lat   += (buffer[i + 14] & 0xf) * 10000000;
-      pvt.lat   += (buffer[i + 13] & 0xf) * 100000000;
-
-      pvt.year   = (buffer[i + 23] & 0xf) * 1000 + (buffer[i + 24] & 0xf) * 100 + (buffer[i + 25] & 0xf) * 10 + (buffer[i + 26] & 0xf);
-      pvt.month  = (buffer[i + 28] & 0xf) * 10 + (buffer[i + 29] & 0xf);
-      pvt.day    = (buffer[i + 31] & 0xf) * 10 + (buffer[i + 32] & 0xf);
-      pvt.hour   = (buffer[i + 34] & 0xf) * 10 + (buffer[i + 35] & 0xf);
-      pvt.minute = (buffer[i + 37] & 0xf) * 10 + (buffer[i + 38] & 0xf);
-      pvt.second = (buffer[i + 40] & 0xf) * 10 + (buffer[i + 41] & 0xf);
-
-      pvt.numSV  = 100;
-
-      updateFlashMemory(1);
+      updateFlashMemory(shift9(i + 3), shift9(i + 13));
 
       bts = false;
       break;
     }
   }
+}
+
+long power(long exp)
+{
+  long base = 10;
+  for (byte i = 2; i <= exp; i++) base *= 10;
+  return base;
+}
+
+char shift2(byte pos)
+{
+  return (buffer[pos] & 0xf) * 10 + (buffer[pos + 1] & 0xf);
+}
+
+short shift4(byte pos)
+{
+  return (buffer[pos] & 0xf) * 1000 + (buffer[pos + 1] & 0xf) * 100 + shift2(pos + 2);
+}
+
+long shift9(byte pos)
+{
+  long res = 0;
+  for (byte i = 0; i <= 8; i++)
+  {
+    if (i < 2) res += (buffer[pos + i] & 0xf) * power(8 - i);
+    if (i > 2) res += (buffer[pos + i] & 0xf) * power(9 - i);
+  }
+  return res;
+}
+
+bool repeatingCoordinates()
+{
+  bool repeat = false;
+  if (pvt.lat == lastlat && pvt.lon == lastlon) repeat = true;
+  lastlat = pvt.lat;
+  lastlon = pvt.lon;
+  return repeat;
 }
