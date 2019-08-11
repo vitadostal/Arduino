@@ -21,9 +21,9 @@
 #define modulo 3                                           //number of measures when sending is triggered
 #define sleepsat 8                                         //number of satellites to enable GPS sleeping
 #define before 14                                          //wake Ublox before measure [s]
-#define interval 121                                       //interval between measures [s]
+#define interval 123                                       //interval between measures [s]
 #define unsuccessful 0                                     //store 0 satellites
-#define buttons 0                                          //enable buttons
+#define buttons 1                                          //enable buttons
 
 const char sensor[] PROGMEM = "";                          //Sensor indentification
 const char server[] PROGMEM = "";                          //Processing server
@@ -68,18 +68,27 @@ const char c38[]    PROGMEM = "No GPS";
 const char c39[]    PROGMEM = "Measure button pressed";
 const char c40[]    PROGMEM = "Send button pressed";
 const char c41[]    PROGMEM = "Iteration: ";
+const char c42[]    PROGMEM = "AT+SAPBR=3,1,\"Contype\",\"GPRS\"";
+const char c43[]    PROGMEM = "AT+SAPBR=3,1,\"APN\",\"internet\"";
+const char c44[]    PROGMEM = "AT+SAPBR=1,1";
+const char c45[]    PROGMEM = "AT+SAPBR=2,1";
+const char c46[]    PROGMEM = "AT+CIPGSMLOC=1,1";
+const char c47[]    PROGMEM = "AT+SAPBR=0,1";
 
 const char *const string_table[] PROGMEM = {c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, sensor, server, key,
                                             c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30,
-                                            c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41
+                                            c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47
                                            };
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 const unsigned long wait = interval;
 char buffer[64];
+char temp[10];
 char voltage[4];
 bool fail = false;
 bool modify = false;
 bool success = false;
+bool signal = false;
+bool bts = false;
 byte current = 0;
 byte iterator = 0;
 byte comma = 0;
@@ -117,15 +126,15 @@ struct NAV_PVT {
   unsigned long vAcc;          // Vertical Accuracy Estimate (mm)
 
   /*long velN;                 // NED north velocity (mm/s)
-  long velE;                   // NED east velocity (mm/s)
-  long velD;                   // NED down velocity (mm/s)
-  long gSpeed;                 // Ground Speed (2-D) (mm/s)
-  long heading;                // Heading of motion 2-D (deg)
-  unsigned long sAcc;          // Speed Accuracy Estimate
-  unsigned long headingAcc;    // Heading Accuracy Estimate
-  unsigned short pDOP;         // Position dilution of precision
-  short reserved2;             // Reserved
-  unsigned long reserved3;     // Reserved*/
+    long velE;                   // NED east velocity (mm/s)
+    long velD;                   // NED down velocity (mm/s)
+    long gSpeed;                 // Ground Speed (2-D) (mm/s)
+    long heading;                // Heading of motion 2-D (deg)
+    unsigned long sAcc;          // Speed Accuracy Estimate
+    unsigned long headingAcc;    // Heading Accuracy Estimate
+    unsigned short pDOP;         // Position dilution of precision
+    short reserved2;             // Reserved
+    unsigned long reserved3;     // Reserved*/
 };
 
 NAV_PVT pvt;
@@ -252,7 +261,7 @@ void loop()
       delay(10000);
       measure();
     }
-  
+
     //Early send
     if (digitalRead(btnsend) == LOW)
     {
@@ -268,11 +277,12 @@ void measure()
 {
   timer = millis();
 
+  pvt.fixType = 0;
   iterator++;
   prepare(41); serial.print(buffer); //Iteration:
   serial.println(iterator);
-  if (iterator < 0 || iterator >= modulo) iterator = 0;  
-  
+  if (iterator < 0 || iterator >= modulo) iterator = 0;
+
   readUblox(3000);
   if (pvt.fixType < 2) {
     prepare(38); serial.println(buffer); //GPS lost
@@ -286,6 +296,7 @@ void measure()
   {
     //Successful measure
     updateFlashMemory(1);
+    signal = true;
 
     //Sleep Ublox when a lot of satellites found
     if (sleepsat > 0 && pvt.numSV >= sleepsat) sleepUblox();
@@ -298,9 +309,6 @@ void measure()
 
   //Send results
   if (iterator % modulo == 0) gprs();
-
-  //Reset structure
-  pvt.fixType = 0;
 }
 
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
@@ -383,6 +391,19 @@ void gprs() {
     voltage[2] = buffer[comma + 3];
     voltage[3] = buffer[comma + 4];
   }
+  if (!signal)
+  {
+    prepare(42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
+    prepare(43); communicate(); //AT+SAPBR=3,1,"APN","internet"
+    prepare(44); communicate(); //AT+SAPBR=1,1
+    prepare(45); communicate(); //AT+SAPBR=2,1
+    bts = true;
+    prepare(46); communicate(); //AT+CIPGSMLOC=1,1
+    delay(3000);
+    prepare(47); communicate(); //AT+SAPBR=0,1
+    bts = false;
+  }
+  signal = false;
   prepare(3);  communicate(); //AT+CSTT="internet","",""
   prepare(4);  communicate(); //AT+CIICR
   prepare(5);  communicate(); //AT+CIPSTATUS
@@ -468,6 +489,7 @@ void receiveCommand()
     i++;
     if (i >= 60) i = 1;
   }
+  if (bts) BTSLocation();
   serial.println();
 }
 
@@ -523,5 +545,48 @@ void updateCurrent()
     EEPROM_readAnything(pointer + 0, dt);
     if (dt > old) current = i;
     old = dt;
+  }
+}
+
+void BTSLocation()
+{
+  for (byte i = 4; i++; i <= 40)
+  {
+    if (buffer[i - 4] == 'L' && buffer[i - 3] == 'O' && buffer[i - 2] == 'C' && buffer[i - 1] == ':' && buffer[i] == ' ')
+    {
+      pvt.lon = 0;
+      pvt.lon   += (buffer[i + 11] & 0xf) * 10;
+      pvt.lon   += (buffer[i + 10] & 0xf) * 100;
+      pvt.lon   += (buffer[i + 9]  & 0xf) * 1000;
+      pvt.lon   += (buffer[i + 8]  & 0xf) * 10000;
+      pvt.lon   += (buffer[i + 7]  & 0xf) * 100000;
+      pvt.lon   += (buffer[i + 6]  & 0xf) * 1000000;
+      pvt.lon   += (buffer[i + 4]  & 0xf) * 10000000;
+      pvt.lon   += (buffer[i + 3]  & 0xf) * 100000000;
+
+      pvt.lat = 0;
+      pvt.lat   += (buffer[i + 21] & 0xf) * 10;
+      pvt.lat   += (buffer[i + 20] & 0xf) * 100;
+      pvt.lat   += (buffer[i + 19] & 0xf) * 1000;
+      pvt.lat   += (buffer[i + 18] & 0xf) * 10000;
+      pvt.lat   += (buffer[i + 17] & 0xf) * 100000;
+      pvt.lat   += (buffer[i + 16] & 0xf) * 1000000;
+      pvt.lat   += (buffer[i + 14] & 0xf) * 10000000;
+      pvt.lat   += (buffer[i + 13] & 0xf) * 100000000;
+
+      pvt.year   = (buffer[i + 23] & 0xf) * 1000 + (buffer[i + 24] & 0xf) * 100 + (buffer[i + 25] & 0xf) * 10 + (buffer[i + 26] & 0xf);
+      pvt.month  = (buffer[i + 28] & 0xf) * 10 + (buffer[i + 29] & 0xf);
+      pvt.day    = (buffer[i + 31] & 0xf) * 10 + (buffer[i + 32] & 0xf);
+      pvt.hour   = (buffer[i + 34] & 0xf) * 10 + (buffer[i + 35] & 0xf);
+      pvt.minute = (buffer[i + 37] & 0xf) * 10 + (buffer[i + 38] & 0xf);
+      pvt.second = (buffer[i + 40] & 0xf) * 10 + (buffer[i + 41] & 0xf);
+
+      pvt.numSV  = 100;
+
+      updateFlashMemory(1);
+
+      bts = false;
+      break;
+    }
   }
 }
