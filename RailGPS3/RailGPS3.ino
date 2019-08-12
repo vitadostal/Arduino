@@ -76,10 +76,6 @@ const char c46[]    PROGMEM = "AT+CIPGSMLOC=1,1";
 const char c47[]    PROGMEM = "AT+SAPBR=0,1";
 const char c48[]    PROGMEM = "Same coordinates";
 
-const char *const string_table[] PROGMEM = {c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, sensor, server, key,
-                                            c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30,
-                                            c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48
-                                           };
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 const unsigned long wait = interval;
 char buffer[64];
@@ -227,13 +223,13 @@ void sleepUblox()
     delay(5);
   }
 
-  prepare(24); serial.print(buffer); //Ublox sleep:
+  load((char*)&c24); serial.print(buffer); //Ublox sleep:
   serial.println(interval - before);
 }
 
 void sweetDreams(unsigned long int period)
 {
-  prepare(25); serial.print(buffer); //Attiny sleep:
+  load((char*)&c25); serial.print(buffer); //Attiny sleep:
   serial.println(period);
   delay(period * 1000);
 }
@@ -259,7 +255,7 @@ void loop()
   {
     if (digitalRead(btnmeasure) == LOW)
     {
-      prepare(39); serial.println(buffer); //Measure button pressed
+      load((char*)&c39); serial.println(buffer); //Measure button pressed
       ublox.write(0xFF);
       delay(10000);
       measure();
@@ -268,7 +264,7 @@ void loop()
     //Early send
     if (digitalRead(btnsend) == LOW)
     {
-      prepare(40); serial.println(buffer); //Send button pressed
+      load((char*)&c40); serial.println(buffer); //Send button pressed
       gprs();
     }
   }
@@ -281,17 +277,17 @@ void measure()
   timer = millis();
 
   iterator++;
-  prepare(41); serial.print(buffer); //Iteration:
+  load((char*)&c41); serial.print(buffer); //Iteration:
   serial.println(iterator);
   if (iterator < 0 || iterator >= modulo) iterator = 0;
 
   readUblox(3000);
   if (pvt.fixType < 2) {
-    prepare(38); serial.println(buffer); //No GPS
+    load((char*)&c38); serial.println(buffer); //No GPS
     readUblox(3000);
   }
   if (pvt.fixType < 2) {
-    prepare(38); serial.println(buffer); //No GPS
+    load((char*)&c38); serial.println(buffer); //No GPS
     readUblox(3000);
   }
   if (pvt.fixType >= 2)
@@ -306,7 +302,7 @@ void measure()
     }
     else
     {
-      prepare(48); //Same coordinates
+      load((char*)&c48); //Same coordinates
       serial.println(buffer);
     }
   }
@@ -354,13 +350,13 @@ void updateFlashMemory(long lon, long lat)
   EEPROM_writeAnything(pointer + 5, lon);
   EEPROM_writeAnything(pointer + 9, lat);
 
-  prepare(26); serial.print(buffer); //Cycle:
+  load((char*)&c26); serial.print(buffer); //Cycle:
   serial.print(current);
-  prepare(27); serial.print(buffer); //lat:
+  load((char*)&c27); serial.print(buffer); //lat:
   serial.print(lat);
-  prepare(28); serial.print(buffer); //lng:
+  load((char*)&c28); serial.print(buffer); //lng:
   serial.print(lon);
-  prepare(29); serial.print(buffer); //sat:
+  load((char*)&c29); serial.print(buffer); //sat:
   serial.println(pvt.numSV);
 
   signal = true;
@@ -368,17 +364,17 @@ void updateFlashMemory(long lon, long lat)
   if (current < 0 || current >= cycles) current = 0;
 }
 
-void prepare(byte which) {
-  strcpy_P(buffer, (char *)pgm_read_word(&(string_table[which])));
+void load(char* which) {
+  strcpy_P(buffer, which);
 }
 
 void gprs() {
   sim800.listen();
-  prepare(0);  sim800.println(buffer); delay(500);
+  load((char*)&c0);  sim800.println(buffer); delay(500);
 
-  prepare(0);  communicate(); //AT
-  prepare(1);  communicate(); //AT+IPR=9600
-  prepare(2);  communicate(); //AT+CBC
+  load((char*)&c0);  communicate(); //AT
+  load((char*)&c1);  communicate(); //AT+IPR=9600
+  load((char*)&c2);  communicate(); //AT+CBC
   if (comma < 50)
   {
     voltage[0] = buffer[comma + 1];
@@ -388,46 +384,46 @@ void gprs() {
   }
   if (!signal)
   {
-    prepare(42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
-    prepare(43); communicate(); //AT+SAPBR=3,1,"APN","internet"
-    prepare(44); communicate(); //AT+SAPBR=1,1
-    prepare(45); communicate(); //AT+SAPBR=2,1
+    load((char*)&c42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
+    load((char*)&c43); communicate(); //AT+SAPBR=3,1,"APN","internet"
+    load((char*)&c44); communicate(); //AT+SAPBR=1,1
+    load((char*)&c45); communicate(); //AT+SAPBR=2,1
     bts = true;
-    prepare(46); communicate(); //AT+CIPGSMLOC=1,1
+    load((char*)&c46); communicate(); //AT+CIPGSMLOC=1,1
     delay(3000);
-    prepare(47); communicate(); //AT+SAPBR=0,1
+    load((char*)&c47); communicate(); //AT+SAPBR=0,1
     bts = false;
   }
   signal = false;
-  prepare(3);  communicate(); //AT+CSTT="internet","",""
-  prepare(4);  communicate(); //AT+CIICR
-  prepare(5);  communicate(); //AT+CIPSTATUS
-  prepare(6);  communicate(); //AT+CIFSR
+  load((char*)&c3);  communicate(); //AT+CSTT="internet","",""
+  load((char*)&c4);  communicate(); //AT+CIICR
+  load((char*)&c5);  communicate(); //AT+CIPSTATUS
+  load((char*)&c6);  communicate(); //AT+CIFSR
   modify = true;
-  prepare(12); communicate(); //AT+CIPSTART="TCP","",80
+  load((char*)&c12); communicate(); //AT+CIPSTART="TCP","",80
   modify = false;
   if (!fail) delay (3000);
-  prepare(0);  communicate(); //AT
-  prepare(0);  communicate(); //AT
-  prepare(0);  communicate(); //AT
-  prepare(8);  communicate(); //AT+CIPQSEND=1
-  prepare(7);  communicate(); //AT+CIPSEND=size
+  load((char*)&c0);  communicate(); //AT
+  load((char*)&c0);  communicate(); //AT
+  load((char*)&c0);  communicate(); //AT
+  load((char*)&c8);  communicate(); //AT+CIPQSEND=1
+  load((char*)&c7);  communicate(); //AT+CIPSEND=size
   if (!fail) {
     delay(2000);
     trasmit();
     delay(2000);
   }
-  prepare(32); communicate(); //AT+CIPSEND?
-  prepare(33); communicate(); //AT+CIPCLOSE
-  prepare(10); communicate(); //AT+CIPSHUT
-  prepare(11); communicate(); //AT+CSCLK=2
-  //prepare(37); communicate(); //AT+CPOWD=1
+  load((char*)&c32); communicate(); //AT+CIPSEND?
+  load((char*)&c33); communicate(); //AT+CIPCLOSE
+  load((char*)&c10); communicate(); //AT+CIPSHUT
+  load((char*)&c11); communicate(); //AT+CSCLK=2
+  //load((char*)&c37); communicate(); //AT+CPOWD=1
   if (!success) fail = true;
 
   if (fail)
   {
     fail = false;
-    prepare(31); serial.println(buffer); //Modem reset
+    load((char*)&c31); serial.println(buffer); //Modem reset
     pinMode(simreset, OUTPUT);
     digitalWrite(simreset, LOW);
     delay(50);
@@ -451,8 +447,8 @@ void sendCommand()
 
   if (modify)
   {
-    prepare(14); serial.print(buffer); sim800.print(buffer);
-    prepare(36); serial.print(buffer); sim800.print(buffer);
+    load((char*)&server); serial.print(buffer); sim800.print(buffer);
+    load((char*)&c36); serial.print(buffer); sim800.print(buffer);
   }
 
   serial.println();
@@ -490,34 +486,34 @@ void receiveCommand()
 
 void trasmit()
 {
-  prepare(16); sim800.print(buffer); //POST /script/measure_add_gps2.php HTTP/1.1
-  prepare(17); sim800.print(buffer); //LINE
-  prepare(18); sim800.print(buffer); //Host:
-  prepare(14); sim800.print(buffer); //SERVER
-  prepare(17); sim800.print(buffer); //LINE
-  prepare(19); sim800.print(buffer); //User-Agent: Arduinosim800
-  prepare(13); sim800.print(buffer); //SENSOR
-  prepare(17); sim800.print(buffer); //LINE
-  prepare(20); sim800.print(buffer); //Connection: close
-  prepare(17); sim800.print(buffer); //LINE
-  prepare(21); sim800.print(buffer); //Content-Type: application/x-www-form-urlencoded
-  prepare(17); sim800.print(buffer); //LINE
-  prepare(22); sim800.print(buffer); //Content-Length:
+  load((char*)&c16); sim800.print(buffer); //POST /script/measure_add_gps2.php HTTP/1.1
+  load((char*)&c17); sim800.print(buffer); //LINE
+  load((char*)&c18); sim800.print(buffer); //Host:
+  load((char*)&server); sim800.print(buffer); //SERVER
+  load((char*)&c17); sim800.print(buffer); //LINE
+  load((char*)&c19); sim800.print(buffer); //User-Agent: Arduinosim800
+  load((char*)&sensor); sim800.print(buffer); //SENSOR
+  load((char*)&c17); sim800.print(buffer); //LINE
+  load((char*)&c20); sim800.print(buffer); //Connection: close
+  load((char*)&c17); sim800.print(buffer); //LINE
+  load((char*)&c21); sim800.print(buffer); //Content-Type: application/x-www-form-urlencoded
+  load((char*)&c17); sim800.print(buffer); //LINE
+  load((char*)&c22); sim800.print(buffer); //Content-Length:
   sim800.print(cycles * packet + 12 + 5 + 4 + 2 + 4 * 1); //Contet + Key + Sensor + Voltage + Battery + Delimiters
-  prepare(17); sim800.print(buffer); //LINE
-  prepare(17); sim800.print(buffer); //LINE
+  load((char*)&c17); sim800.print(buffer); //LINE
+  load((char*)&c17); sim800.print(buffer); //LINE
 
-  prepare(15); sim800.print(buffer); //KEY
-  prepare(23); sim800.print(buffer); //|
-  prepare(13); sim800.print(buffer); //SENSOR
-  prepare(23); sim800.print(buffer); //|
+  load((char*)&key); sim800.print(buffer); //KEY
+  load((char*)&c23); sim800.print(buffer); //|
+  load((char*)&sensor); sim800.print(buffer); //SENSOR
+  load((char*)&c23); sim800.print(buffer); //|
   sim800.print(voltage[0]);
   sim800.print(voltage[1]);
   sim800.print(voltage[2]);
   sim800.print(voltage[3]);
-  prepare(23); sim800.print(buffer); //|
-  prepare(34); sim800.print(buffer); //00
-  prepare(23); sim800.print(buffer); //|
+  load((char*)&c23); sim800.print(buffer); //|
+  load((char*)&c34); sim800.print(buffer); //00
+  load((char*)&c23); sim800.print(buffer); //|
 
   byte data;
   for (int address = 0; address < cycles * packet ; address++) {
@@ -525,8 +521,8 @@ void trasmit()
     sim800.write(data);
   }
 
-  prepare(17); sim800.print(buffer); //LINE
-  prepare(17); sim800.print(buffer); //LINE
+  load((char*)&c17); sim800.print(buffer); //LINE
+  load((char*)&c17); sim800.print(buffer); //LINE
 }
 
 void updateCurrent()
@@ -545,19 +541,20 @@ void updateCurrent()
 
 void BTSLocation()
 {
-  for (byte i = 4; i++; i <= 40)
+  for (byte i = 6; i++; i <= 40)
   {
-    if (buffer[i - 4] == 'L' && buffer[i - 3] == 'O' && buffer[i - 2] == 'C' && buffer[i - 1] == ':' && buffer[i] == ' ')
+    if (buffer[i - 6] == 'L' && buffer[i - 5] == 'O' && buffer[i - 4] == 'C' && buffer[i - 3] == ':' && buffer[i - 2] == ' ' && buffer[i - 1] == '0' && buffer[i] == ',')
     {
-      pvt.year   = shift4(i + 23);
-      pvt.month  = shift2(i + 28);
-      pvt.day    = shift2(i + 31);
-      pvt.hour   = shift2(i + 34);
-      pvt.minute = shift2(i + 37);
-      pvt.second = shift2(i + 40);
+      pvt.year   = convert(i + 21, 4);
+      pvt.month  = convert(i + 26, 2);
+      pvt.day    = convert(i + 29, 2);
+      pvt.hour   = convert(i + 32, 2);
+      pvt.minute = convert(i + 35, 2);
+      pvt.second = convert(i + 38, 2);
       pvt.numSV  = btssat;
 
-      updateFlashMemory(shift9(i + 3), shift9(i + 13));
+      updateFlashMemory(convert(i + 1, 9) * 10, convert(i + 11, 9) * 10);
+      memcpy(&buffer, 0, sizeof(buffer));
 
       bts = false;
       break;
@@ -565,30 +562,14 @@ void BTSLocation()
   }
 }
 
-long power(long exp)
-{
-  long base = 10;
-  for (byte i = 2; i <= exp; i++) base *= 10;
-  return base;
-}
-
-char shift2(byte pos)
-{
-  return (buffer[pos] & 0xf) * 10 + (buffer[pos + 1] & 0xf);
-}
-
-short shift4(byte pos)
-{
-  return (buffer[pos] & 0xf) * 1000 + (buffer[pos + 1] & 0xf) * 100 + shift2(pos + 2);
-}
-
-long shift9(byte pos)
+long convert(byte pos, byte len)
 {
   long res = 0;
-  for (byte i = 0; i <= 8; i++)
+  for (byte i = 0; i < len; i++)
   {
-    if (i < 2) res += (buffer[pos + i] & 0xf) * power(8 - i);
-    if (i > 2) res += (buffer[pos + i] & 0xf) * power(9 - i);
+    if (buffer[pos + i] == '.') continue;
+    if (i != 0) res *= 10;
+    res += (buffer[pos + i] & 0xf);
   }
   return res;
 }
