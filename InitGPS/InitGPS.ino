@@ -47,6 +47,9 @@ unsigned char data5[] = {
 unsigned char data6[] = {
   0xB5, 0x62, 0x02, 0x41, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00    //Sleep now
 };
+unsigned char data7[] = {
+  0xB5, 0x62, 0x06, 0x11, 0x02, 0x00, 0x48, 0x01, 0x62, 0x12                                        //Receiver mgmt pwr save
+};
 
 void baud4800() {
   for (int i = 0; i < sizeof(data1); i++) {
@@ -106,6 +109,15 @@ void sleep()
   }
 }
 
+void powersaving() {
+  for (int i = 0; i < sizeof(data5); i++) {
+    serial.write(data7[i]);
+    ublox.write(data7[i]);
+    delay(5);
+  }
+  serial.println();
+}
+
 void setChecksum(unsigned char* data, int length) {
   data[length - 2] = 0;
   data[length - 1] = 0;
@@ -144,6 +156,7 @@ void loop() {
     ublox.begin(gpsbaudl);
     messages();
     galileo();
+    powersaving();
     save();
     sleep();
     ublox.end();

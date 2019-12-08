@@ -20,3 +20,5 @@
   if (isset($measureHmdt->value1)) print $measureHmdt->value1;
   print ';';  
   if (isset($measurePres->value1)) print $measurePres->value1;
+
+  $database->conn->close();

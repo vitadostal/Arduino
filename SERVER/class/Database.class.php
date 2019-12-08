@@ -22,6 +22,19 @@ class Database
     $this->conn->set_charset("utf8");
   }
 
+  public function connectDatabase($db)
+  {
+    $this->loadCredentials();
+    
+  	$this->conn = new mysqli($this->servername, $db, $this->password, $db);
+  	if ($this->conn->connect_error)
+    {
+      die("Connection failed: " . $this->conn->connect_error);
+  	}
+    
+    $this->conn->set_charset("utf8");
+  }
+
 	public function getById($table, $idName, $idValue)
 	{
 		$table    = mysqli_real_escape_string($this->conn, $table);

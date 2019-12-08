@@ -38,7 +38,7 @@
   $nextweek->modify('+1 week');
   
   //Analyze sensor data
-  //file_put_contents('/tmpx', date("D M j G:i:s T Y, "). strlen($packet). "\n", FILE_APPEND);
+  //file_put_contents('/tmpx', date("D M j G:i:s T Y, "). strlen($packet). ", ". $voltage. " V\n", FILE_APPEND);
   $cycles = floor(strlen($packet) / 13);
   $records = array(); 
   for($cycle = 0; $cycle < $cycles; $cycle++)
@@ -91,7 +91,9 @@
       $timestamp = $datetime->format('Y-m-d H:i:s');
       
       $record['stamp'] = $timestamp;
-      //file_put_contents('/tmpx', "[$cycle]\t$lng\t$lat\t$sat\t$timestamp\n", FILE_APPEND);      
+      $cycletext = $cycle;
+      if ($cycletext < 10) $cycletext = ' '. $cycletext;
+      //file_put_contents('/tmpx', "[ $cycletext ]\t$id\t| $lat\t$lng |\t$timestamp\t| $sat\n", FILE_APPEND);      
 
       if ($lastweek < $datetime && $nextweek > $datetime && $lat != -1 && $lng != -1 && $sat != 255) $records[$id] = $record;
     }
@@ -105,6 +107,7 @@
   //Database transaction
   $sql = 'START TRANSACTION;';
  
+  $real = 0;
   foreach ($records as $record)
   {
     $datetime = new DateTime($record['stamp']);
@@ -112,6 +115,8 @@
     //Only newer measures are stored
     if ($lastdatetime == null || $lastdatetime < $datetime)
     {
+      $real++;
+      
       if ($record['sat'] != 0)
       {
         $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1, value2, value3)
@@ -129,11 +134,14 @@
       {
         $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
         VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";
-
-        $sql .= "INSERT INTO measure (timestamp, sensor, class, field, value1)
-        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclassbat."', 4, '$battery');";
       }
     }
+  }
+  
+  if ($real == 0)
+  {
+    $sql .= "INSERT INTO measure (sensor, class, field, value1)
+    VALUES ('$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";  
   }
  
   $sql .= 'COMMIT;';
