@@ -1,6 +1,6 @@
 //Railtour GPS data gatherer IV
 //Vitezslav Dostal | started 30.10.2019
-//Hardware required: Attiny 1634 & AT24C32 & UbloxNeo & SIM800L
+//Hardware required: Attiny 1634 & AT24C32 & UbloxNeo & SIM800L (FW 1418B05SIM800L24)
 
 #define gpsbaud 4800
 #define simbaud 4800
@@ -22,6 +22,7 @@
 #define sleepsat 8                                         //number of satellites to enable GPS sleeping
 #define before 14                                          //wake Ublox before measure [s]
 #define interval 123                                       //interval between measures [s]
+#define gpsmodule 1                                        //listen to GPS module
 
 #define SDA_PORT PORTA                                     //AT24C32 SDA port
 #define SCL_PORT PORTA                                     //AT24C32 SCL port
@@ -31,7 +32,8 @@
 const char sensor[] PROGMEM = "";                          //Sensor indentification
 const char server[] PROGMEM = "";                          //Processing server
 const char key[]    PROGMEM = "";                          //API write key
-const int  address = 0x50;                                 //AT24C32 I2C address
+
+const int  address  PROGMEM = 0x50;                        //Memory chip address
 
 #include <SoftWire.h>
 #include <SoftwareSerial.h>
@@ -79,13 +81,17 @@ const char c42[]    PROGMEM = "AT+SAPBR=3,1,\"Contype\",\"GPRS\"";
 const char c43[]    PROGMEM = "AT+SAPBR=3,1,\"APN\",\"internet\"";
 const char c44[]    PROGMEM = "AT+SAPBR=1,1";
 const char c45[]    PROGMEM = "AT+SAPBR=2,1";
-const char c46[]    PROGMEM = "AT+CIPGSMLOC=1,1";
+const char c46[]    PROGMEM = "AT+CLBS=4,1";
 const char c47[]    PROGMEM = "AT+SAPBR=0,1";
 const char c48[]    PROGMEM = "Same coordinates";
 const char c49[]    PROGMEM = "Scanning flash memory";
 const char c50[]    PROGMEM = "Next cycle: ";
 const char c51[]    PROGMEM = ": ";
 const char c52[]    PROGMEM = " time: ";
+const char c53[]    PROGMEM = "AT+CGMR";
+const char c54[]    PROGMEM = "AT+CLBSCFG=1,3,\"lbs-simcom.com:3002\"";
+const char c55[]    PROGMEM = "AT+CLBSCFG=0,3";
+const char c56[]    PROGMEM = "AT+CIPGSMLOC=1,1";
 
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 const unsigned long wait = interval;
@@ -97,7 +103,8 @@ bool fail = false;
 bool modify = false;
 bool success = false;
 bool signal = false;
-bool bts = false;
+byte analyze = 0;
+bool analyzed = false;
 byte current = 0;
 byte iterator = 0;
 byte comma = 0;
@@ -209,6 +216,8 @@ bool processGPS() {
 
 static void readUblox(int ms)
 {
+  if (!gpsmodule) return;
+
   unsigned long start = millis();
   do
   {
@@ -291,6 +300,7 @@ void measure()
   timer = millis();
 
   iterator++;
+  Serial1.println();
   load((char*)&c41); Serial1.print(buffer); //Iteration:
   Serial1.println(iterator);
   if (iterator < 0 || iterator >= modulo) iterator = 0;
@@ -341,8 +351,8 @@ void updateFlashMemory(long lon, long lat)
 
   memcpy(&memory[0], &dt, 4);
   memcpy(&memory[4], &pvt.numSV, 1);
-  memcpy(&memory[5], &pvt.lon, 4);
-  memcpy(&memory[9], &pvt.lat, 4);
+  memcpy(&memory[5], &lon, 4);
+  memcpy(&memory[9], &lat, 4);
 
   writeMemoryPacket(current);
 
@@ -367,9 +377,11 @@ void load(char* which) {
 }
 
 void gprs() {
+  Serial1.println();
   load((char*)&c0);  Serial.println(buffer); delay(500);
 
   load((char*)&c0);  communicate(); //AT
+  load((char*)&c53);  communicate(); //AT-ver
   load((char*)&c1);  communicate(); //AT+IPR=9600
   load((char*)&c2);  communicate(); //AT+CBC
   if (comma < 50)
@@ -385,11 +397,23 @@ void gprs() {
     load((char*)&c43); communicate(); //AT+SAPBR=3,1,"APN","internet"
     load((char*)&c44); communicate(); //AT+SAPBR=1,1
     load((char*)&c45); communicate(); //AT+SAPBR=2,1
-    bts = true;
-    load((char*)&c46); communicate(); //AT+CIPGSMLOC=1,1
-    delay(3000);
+    load((char*)&c55); analyze = 1; communicate(); //AT+CLBSCFG=0,3
+
+    for (byte i = 0; i < 7; i++)
+    {
+      load((char*)&c56); communicate(); //AT+CIPGSMLOC=1,1
+      load((char*)&c0); analyze = 2; communicate(); //AT
+      if (analyzed) break;
+    }
+
+    for (byte i = 0; i < 7; i++)
+    {
+      load((char*)&c46); communicate(); //AT+CLBS=4,1
+      load((char*)&c0); analyze = 3; communicate(); //AT
+      if (analyzed) break;
+    }
+
     load((char*)&c47); communicate(); //AT+SAPBR=0,1
-    bts = false;
   }
   signal = false;
   load((char*)&c3);  communicate(); //AT+CSTT="internet","",""
@@ -423,6 +447,7 @@ void gprs() {
     load((char*)&c31); Serial1.println(buffer); //Modem reset
     pinMode(simreset, OUTPUT);
     digitalWrite(simreset, LOW);
+    delay(50);
     pinMode(simreset, INPUT_PULLUP);
   }
 }
@@ -459,10 +484,10 @@ void receiveCommand()
   stamp = millis();
   byte i = 1;
 
-  while (!Serial.available() && millis() < stamp + 5000) {
+  while (!Serial.available() && millis() < stamp + 10000) {
     delay (50);
   }
-  if (millis() > stamp + 5000) fail = true;
+  if (millis() > stamp + 10000) fail = true;
   delay (100);
 
   while (Serial.available()) {
@@ -476,7 +501,11 @@ void receiveCommand()
     i++;
     if (i >= 60) i = 1;
   }
-  if (bts) BTSLocation();
+  if (analyze == 1) BTSServer();
+  if (analyze == 2) BTSDateTime();
+  if (analyze == 3) BTSLocation();
+
+  analyze = 0;
   Serial1.println();
 }
 
@@ -525,24 +554,52 @@ void trasmit()
   load((char*)&c17); Serial.print(buffer); //LINE
 }
 
-void BTSLocation()
+void BTSServer()
 {
-  for (byte i = 6; i++; i <= 40)
+  for (byte i = 7; i++; i <= 30)
   {
-    if (buffer[i - 6] == 'L' && buffer[i - 5] == 'O' && buffer[i - 4] == 'C' && buffer[i - 3] == ':' && buffer[i - 2] == ' ' && buffer[i - 1] == '0' && buffer[i] == ',')
+    if (buffer[i - 7] == 'c' && buffer[i - 6] == '4' && buffer[i - 5] == 'a' && buffer[i - 4] == '.' && buffer[i - 3] == 'c'
+        && buffer[i - 2] == 'o' && buffer[i - 1] == 'm' && buffer[i] == '.')
     {
-      pvt.year   = convert(i + 21, 4);
-      pvt.month  = convert(i + 26, 2);
-      pvt.day    = convert(i + 29, 2);
-      pvt.hour   = convert(i + 32, 2);
-      pvt.minute = convert(i + 35, 2);
-      pvt.second = convert(i + 38, 2);
+      load((char*)&c54); communicate(); //AT+CLBSCFG=1,3,"lbs-simcom.com:3002"
+    }
+  }
+}
+
+void BTSDateTime()
+{
+  analyzed = false;
+  for (byte i = 7; i++; i <= 30)
+  {
+    if (buffer[i - 6] == 'L' && buffer[i - 5] == 'O' && buffer[i - 4] == 'C' && buffer[i - 3] == ':'
+        && buffer[i - 2] == ' ' && buffer[i - 1] == '0' && buffer[i] == ',' && buffer[i + 29] == ',' && buffer[i + 35] == ':')
+    {
+      pvt.year   = convert(i + 19, 4);
+      pvt.month  = convert(i + 24, 2);
+      pvt.day    = convert(i + 27, 2);
+      pvt.hour   = convert(i + 30, 2);
+      pvt.minute = convert(i + 33, 2);
+      pvt.second = convert(i + 36, 2);
       pvt.numSV  = btssat;
 
-      updateFlashMemory(convert(i + 1, 9) * 10, convert(i + 11, 9) * 10);
+      analyzed = true;
+      break;
+    }
+  }
+}
+
+void BTSLocation()
+{
+  analyzed = false;
+  for (byte i = 7; i++; i <= 30)
+  {
+    if (buffer[i - 7] == '+' && buffer[i - 6] == 'C' && buffer[i - 5] == 'L' && buffer[i - 4] == 'B' && buffer[i - 3] == 'S'
+        && buffer[i - 2] == ':' && buffer[i - 1] == ' ' && buffer[i] == '0' && buffer[i + 11] == ',' && buffer[i + 21] == ',')
+    {
+      updateFlashMemory(convert(i + 2, 9) * 10, convert(i + 12, 9) * 10);
       memcpy(&buffer, 0, sizeof(buffer));
 
-      bts = false;
+      analyzed = true;
       break;
     }
   }
@@ -661,7 +718,12 @@ void updateCurrent()
   for (byte i = 0; i < cycles; i++)
   {
     dt = displayMemoryPacket(i);
-    if (dt != 4294967295 && dt > old)
+    if (dt == 4294967295)
+    {
+      current = i;
+      break;
+    }
+    if (dt > old)
     {
       current = i + 1;
       old = dt;
@@ -672,5 +734,4 @@ void updateCurrent()
 
   load((char*)&c50); Serial1.print(buffer); //Next cycle:
   Serial1.println(current);
-  Serial1.println();
 }
