@@ -2,37 +2,84 @@
 //Vitezslav Dostal | started 30.10.2019
 //Hardware required: Attiny 1634 & AT24C32 & UbloxNeo & SIM800L (FW 1418B05SIM800L24)
 
-#define gpsbaud 4800
-#define simbaud 4800
-#define serbaud 9600
-#define btnsend 0
-#define simreset 2
-#define btnmeasure 3
-#define gpstx 4
-#define gpsrx 5
-#define flashscl 6
-#define flashsda 7
-#define btssat 100
+// Bit manipulation macros
+#define BIT_SET(byte,nbit)   byte |=  (1 << nbit)
+#define BIT_CLEAR(byte,nbit) byte &= ~(1 << nbit)
+#define BIT_FLIP(byte,nbit)  byte ^=  (1 << nbit)
+#define BIT_CHECK(byte,nbit) byte &   (1 << nbit)
 
-#define cycles 69                                          //Measures stored in flash memory
-#define packet 13                                          //Size of one measure in bytes
-#define mpacket 32                                         //Size of one measure in flash memory in bytes
-#define mshift 0                                           //Flash memory shift in bytes
-#define modulo 3                                           //number of measures when sending is triggered
-#define sleepsat 8                                         //number of satellites to enable GPS sleeping
-#define before 14                                          //wake Ublox before measure [s]
-#define interval 123                                       //interval between measures [s]
-#define gpsmodule 1                                        //listen to GPS module
-#define btscheck 1                                         //listen to GPS module
+#define GPSBAUD 4800
+#define SIMBAUD 9600
+#define SERBAUD 9600
+#define BTNSEND 3
+#define SIMRESET 2
+#define BTNMEASURE 0
+#define GPSTX 4
+#define GPSRX 5
+#define FLASHSCL 6
+#define FLASHSDA 7
+#define BTSSAT 100
+
+#ifndef CYCLES
+#define CYCLES 69                                          //Measures stored in flash memory
+#endif
+
+#define PACKET 13                                          //Size of one measure in bytes
+#define PACKETS CYCLES * PACKET                            //Size of all measures in bytes
+#define MPACKET 32                                         //Size of one measure in flash memory in bytes
+#define MSHIFT 0                                           //Flash memory shift in bytes
+
+#ifndef MODULO
+#define MODULO 3                                           //Number of measures when sending is triggered
+#endif
+
+#ifndef SLEEPSAT
+#define SLEEPSAT 8                                         //Number of satellites to enable GPS sleeping
+#endif
+
+#define BEFORE 14                                          //Wake Ublox before measure [s]
+
+#ifndef INTERVAL
+#define INTERVAL 123                                       //Interval between measures [s]
+#endif
+
+#define GPSMODULE 1                                        //Listen to GPS module
+
+#ifndef BTSCHECK
+#define BTSCHECK 1                                         //Use SIM module capabilities to compute position (triangulation)
+#endif
+
+#ifndef SENSOR
+#define SENSOR ""                                          //Sensor identification
+#endif
+
+#ifndef SERVER
+#define SERVER ""                                          //Processing server URL
+#endif
+
+#ifndef SERVERPORT
+#define SERVERPORT "80"                                    //Processing server port
+#endif
+
+#ifndef SERVERPATH
+#define SERVERPATH "/script/measure_add_gps2.php"          //Processing script path
+#endif
+
+#ifndef APIKEY
+#define APIKEY ""                                          //API write key
+#endif
 
 #define SDA_PORT PORTA                                     //AT24C32 SDA port
 #define SCL_PORT PORTA                                     //AT24C32 SCL port
 #define SDA_PIN 1                                          //AT24C32 SDA port pin
 #define SCL_PIN 2                                          //AT24C32 SCL port pin
 
-const char sensor[] PROGMEM = "";                          //Sensor indentification
-const char server[] PROGMEM = "";                          //Processing server
-const char key[]    PROGMEM = "";                          //API write key
+#define FLAGS_ALARM_PAST 0                                 //Position of flag bit - alarm was activated in the past
+#define FLAGS_ALARM_NOW 1                                  //Position of flag bit - alarm was activated right now
+
+const char sensor[] PROGMEM = SENSOR;                      //Sensor indentification
+const char server[] PROGMEM = SERVER;                      //Processing server
+const char key[]    PROGMEM = APIKEY;                      //API write key
 
 const int  address  PROGMEM = 0x50;                        //Memory chip address
 
@@ -40,19 +87,19 @@ const int  address  PROGMEM = 0x50;                        //Memory chip address
 #include <SoftwareSerial.h>
 
 const char c0[]     PROGMEM = "AT";
-const char c1[]     PROGMEM = "AT+IPR=4800";               //The speed must be set also here!
+const char c1[]     PROGMEM = "AT+IPR=";
 const char c2[]     PROGMEM = "AT+CBC";
 const char c3[]     PROGMEM = "AT+CSTT=\"internet\",\"\",\"\"";
 const char c4[]     PROGMEM = "AT+CIICR";
 const char c5[]     PROGMEM = "AT+CIPSTATUS";
 const char c6[]     PROGMEM = "AT+CIFSR";
-const char c7[]     PROGMEM = "AT+CIPSEND=1120";           //The size must match precisely! cycles * packet + 223, for example: 39->730 69->1120 126->1861
+const char c7[]     PROGMEM = "AT+CIPSEND=0"; // not used, value is computed dynamically (not easy to compute + concatenate to string at compile time)
 const char c8[]     PROGMEM = "AT+CIPQSEND=1";
 const char c9[]     PROGMEM = "AT+CIPCLOSE";
 const char c10[]    PROGMEM = "AT+CIPSHUT";
 const char c11[]    PROGMEM = "AT+CSCLK=2";
 const char c12[]    PROGMEM = "AT+CIPSTART=\"TCP\",\"";
-const char c16[]    PROGMEM = "POST /script/measure_add_gps2.php HTTP/1.1";
+const char c16[]    PROGMEM = "POST " SERVERPATH " HTTP/1.1";
 const char c17[]    PROGMEM = "\r\n";
 const char c18[]    PROGMEM = "Host: ";
 const char c19[]    PROGMEM = "User-Agent: ArduinoSIM800";
@@ -70,9 +117,8 @@ const char c30[]    PROGMEM = ">>> ";
 const char c31[]    PROGMEM = "Modem reset";
 const char c32[]    PROGMEM = "AT+CIPSEND?";
 const char c33[]    PROGMEM = "AT+CIPCLOSE";
-const char c34[]    PROGMEM = "00";
 const char c35[]    PROGMEM = "4200";
-const char c36[]    PROGMEM = "\",80";
+const char c36[]    PROGMEM = "\"," SERVERPORT;
 const char c37[]    PROGMEM = "AT+CPOWD=1";
 const char c38[]    PROGMEM = "No GPS";
 const char c39[]    PROGMEM = "Measure button";
@@ -95,7 +141,7 @@ const char c55[]    PROGMEM = "AT+CLBSCFG=0,3";
 const char c56[]    PROGMEM = "AT+CIPGSMLOC=1,1";
 
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
-const unsigned long wait = interval;
+const unsigned long wait = INTERVAL;
 char memory[13];
 char buffer[64];
 char temp[10];
@@ -104,6 +150,8 @@ bool fail = false;
 bool modify = false;
 bool success = false;
 bool signal = false;
+bool btnMeasureLast = false;
+bool btnSendLast = false;
 byte analyze = 0;
 bool analyzed = false;
 byte current = 0;
@@ -114,7 +162,7 @@ long lastlon = 0;
 unsigned long timer;
 char delim[2];
 
-SoftwareSerial ublox(gpsrx, gpstx);
+SoftwareSerial ublox(GPSRX, GPSTX);
 SoftWire Wire1 = SoftWire();
 
 struct NAV_PVT {
@@ -155,8 +203,9 @@ struct NAV_PVT {
   short reserved2;             // Reserved
   unsigned long reserved3;     // Reserved
 };
-
 NAV_PVT pvt;
+
+byte flags;
 
 void calcChecksum(unsigned char* CK) {
   memset(CK, 0, 2);
@@ -217,7 +266,7 @@ bool processGPS() {
 
 static void readUblox(int ms)
 {
-  if (!gpsmodule) return;
+  if (!GPSMODULE) return;
 
   unsigned long start = millis();
   do
@@ -232,20 +281,20 @@ void sleepUblox()
 {
   //UBX-RXM-PMREQ
   unsigned char data[] = {0xB5, 0x62, 0x02, 0x41, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00};
-  unsigned long num = interval;
-  num -= before;
+  unsigned long num = INTERVAL;
+  num -= BEFORE;
   num = num * 1000;
   memcpy(&data[6], &num, 4);
   setChecksum(data, sizeof(data));
 
-  for (int i = 0; i < sizeof(data); i++)
+  for (unsigned int i = 0; i < sizeof(data); i++)
   {
     ublox.write(data[i]);
     delay(5);
   }
 
   load((char*)&c24); Serial1.print(buffer); //Ublox sleep:
-  Serial1.println(interval - before);
+  Serial1.println(INTERVAL - BEFORE);
 }
 
 void sweetDreams(unsigned long int period)
@@ -257,18 +306,20 @@ void sweetDreams(unsigned long int period)
 
 void setup()
 {
-  memset(&memory, 255, packet);
+  memset(&memory, 255, PACKET);
   delim[0] = 0x1a;
   delim[1] = 0x00;
-  if (btnmeasure) pinMode(btnmeasure, INPUT_PULLUP);
-  if (btnsend) pinMode(btnsend, INPUT_PULLUP);
-  pinMode(flashscl, INPUT_PULLUP);
-  pinMode(flashsda, INPUT_PULLUP);
+  if (BTNMEASURE) pinMode(BTNMEASURE, INPUT_PULLUP);
+  if (BTNSEND) pinMode(BTNSEND, INPUT_PULLUP);
+  btnMeasureLast = true;
+  btnSendLast = true;
+  pinMode(FLASHSCL, INPUT_PULLUP);
+  pinMode(FLASHSDA, INPUT_PULLUP);
   Wire1.begin();
-  Serial1.begin(serbaud);
+  Serial1.begin(SERBAUD);
   Serial1.println();
-  ublox.begin(gpsbaud);
-  Serial.begin(simbaud);
+  ublox.begin(GPSBAUD);
+  Serial.begin(SIMBAUD);
   updateCurrent();
   measure();
 }
@@ -278,19 +329,37 @@ void loop()
   delay(100);
 
   //Early measure
-  if (btnmeasure && digitalRead(btnmeasure) == LOW)
-  {
-    load((char*)&c39); Serial1.println(buffer); //Measure button pressed
-    ublox.write(0xFF);
-    delay(10000);
-    measure();
+  if (BTNMEASURE) {
+    if (!btnMeasureLast) {
+      if (digitalRead(BTNMEASURE) == HIGH) {
+        btnMeasureLast = true;
+        load((char*)&c39); Serial1.println(buffer); //Measure button pressed
+        ublox.write(0xFF);
+        delay(10000);
+        measure();
+      }
+    } else {
+      if (digitalRead(BTNMEASURE) == LOW) {
+        btnMeasureLast = false;
+      }
+    }
   }
 
   //Early send
-  if (btnsend && digitalRead(btnsend) == LOW)
-  {
-    load((char*)&c40); Serial1.println(buffer); //Send button pressed
-    gprs();
+  if (BTNSEND) {
+    if (!btnSendLast) {
+      if (digitalRead(BTNSEND) == HIGH) {
+        btnSendLast = true;
+        BIT_SET(flags,FLAGS_ALARM_PAST);
+        BIT_SET(flags,FLAGS_ALARM_NOW);
+        load((char*)&c40); Serial1.println(buffer); //Send button pressed
+        gprs();
+      }
+    } else {
+      if (digitalRead(BTNSEND) == LOW) {
+        btnSendLast = false;
+      }
+    }
   }
 
   if (millis() - timer > wait * 1000) measure();
@@ -304,7 +373,7 @@ void measure()
   Serial1.println();
   load((char*)&c41); Serial1.print(buffer); //Iteration:
   Serial1.println(iterator);
-  if (iterator < 0 || iterator >= modulo) iterator = 0;
+  if (iterator < 0 || iterator >= MODULO) iterator = 0;
 
   readUblox(3000);
   if (pvt.fixType < 2) {
@@ -323,7 +392,7 @@ void measure()
       updateFlashMemory(pvt.lon, pvt.lat);
 
       //Sleep Ublox when a lot of satellites found
-      if (sleepsat > 0 && pvt.numSV >= sleepsat) sleepUblox();
+      if (SLEEPSAT > 0 && pvt.numSV >= SLEEPSAT) sleepUblox();
     }
     else
     {
@@ -333,7 +402,7 @@ void measure()
   }
 
   //Send results
-  if (iterator % modulo == 0) gprs();
+  if (iterator % MODULO == 0) gprs();
 }
 
 void updateFlashMemory(long lon, long lat)
@@ -348,7 +417,7 @@ void updateFlashMemory(long lon, long lat)
   dt_date += pvt.day;
   unsigned long dt = dt_date * 100000 + dt_time;
 
-  if (current < 0 || current >= cycles) current = 0;
+  if (current < 0 || current >= CYCLES) current = 0;
 
   memcpy(&memory[0], &dt, 4);
   memcpy(&memory[4], &pvt.numSV, 1);
@@ -370,21 +439,27 @@ void updateFlashMemory(long lon, long lat)
 
   signal = true;
   current++;
-  if (current < 0 || current >= cycles) current = 0;
+  if (current < 0 || current >= CYCLES) current = 0;
 }
 
 void load(char* which) {
   strcpy_P(buffer, which);
 }
 
+void loadAtPosition(const char* what, byte position) {
+  sprintf(temp, "%d", what);
+  memcpy(&buffer[position], &temp, strlen(temp));
+  memcpy(&buffer[position] + strlen(temp), '\0', 1);
+}
+
 void gprs() {
   Serial1.println();
   load((char*)&c0);  Serial.println(buffer); delay(500);
 
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c53);  communicate(); //AT-ver
-  load((char*)&c1);  communicate(); //AT+IPR=9600
-  load((char*)&c2);  communicate(); //AT+CBC
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c53); communicate(); //AT-ver
+  load((char*)&c1); loadAtPosition(SIMBAUD, 7); communicate(); //AT+IPR=4800
+  load((char*)&c2); communicate(); //AT+CBC
   if (comma < 50)
   {
     voltage[0] = buffer[comma + 1];
@@ -392,7 +467,7 @@ void gprs() {
     voltage[2] = buffer[comma + 3];
     voltage[3] = buffer[comma + 4];
   }
-  if (!signal && btscheck)
+  if (!signal && BTSCHECK)
   {
     load((char*)&c42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
     load((char*)&c43); communicate(); //AT+SAPBR=3,1,"APN","internet"
@@ -417,19 +492,21 @@ void gprs() {
     load((char*)&c47); communicate(); //AT+SAPBR=0,1
   }
   signal = false;
-  load((char*)&c3);  communicate(); //AT+CSTT="internet","",""
-  load((char*)&c4);  communicate(); //AT+CIICR
-  load((char*)&c5);  communicate(); //AT+CIPSTATUS
-  load((char*)&c6);  communicate(); //AT+CIFSR
+  load((char*)&c3); communicate(); //AT+CSTT="internet","",""
+  load((char*)&c4); communicate(); //AT+CIICR
+  load((char*)&c5); communicate(); //AT+CIPSTATUS
+  load((char*)&c6); communicate(); //AT+CIFSR
   modify = true;
   load((char*)&c12); communicate(); //AT+CIPSTART="TCP","",80
   modify = false;
   if (!fail) delay (3000);
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c8);  communicate(); //AT+CIPQSEND=1
-  load((char*)&c7);  communicate(); //AT+CIPSEND=size
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c8); communicate(); //AT+CIPQSEND=1
+  // 157 is magick constant that covers all http protocol headers etc.
+  sprintf(buffer, "AT+CIPSEND=%d", PACKETS + 157 + strlen(SERVER) + strlen(SERVERPATH) + strlen(SENSOR) + strlen(APIKEY));
+  communicate(); //AT+CIPSEND=size
   if (!fail) {
     delay(2000);
     trasmit();
@@ -446,10 +523,10 @@ void gprs() {
   {
     fail = false;
     load((char*)&c31); Serial1.println(buffer); //Modem reset
-    pinMode(simreset, OUTPUT);
-    digitalWrite(simreset, LOW);
+    pinMode(SIMRESET, OUTPUT);
+    digitalWrite(SIMRESET, LOW);
     delay(50);
-    pinMode(simreset, INPUT_PULLUP);
+    pinMode(SIMRESET, INPUT_PULLUP);
   }
 }
 
@@ -513,39 +590,40 @@ void receiveCommand()
 void trasmit()
 {
   load((char*)&c16); Serial.print(buffer); //POST /script/measure_add_gps2.php HTTP/1.1
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c18); Serial.print(buffer); //Host:
   load((char*)&server); Serial.print(buffer); //SERVER
-  load((char*)&c17); Serial.print(buffer); //LINE
-  load((char*)&c19); Serial.print(buffer); //User-Agent: Arduinosim800
+  load((char*)&c17); Serial.print(buffer);
+  load((char*)&c19); Serial.print(buffer); //User-Agent: ArduinoSIM800
   load((char*)&sensor); Serial.print(buffer); //SENSOR
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c20); Serial.print(buffer); //Connection: close
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c21); Serial.print(buffer); //Content-Type: application/x-www-form-urlencoded
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c22); Serial.print(buffer); //Content-Length:
-  Serial.print(cycles * packet + 12 + 5 + 4 + 2 + 4 * 1); //Contet + Key + Sensor + Voltage + Battery + Delimiters
-  load((char*)&c17); Serial.print(buffer); //LINE
-  load((char*)&c17); Serial.print(buffer); //LINE
+  Serial.print(PACKETS + strlen(APIKEY) + strlen(SENSOR) + 4 + 1 + 4); // Content + Key + Sensor + Voltage + Flags + Delimiters
+  load((char*)&c17); Serial.print(buffer);
+  load((char*)&c17); Serial.print(buffer);
 
   load((char*)&key); Serial.print(buffer); //KEY
-  load((char*)&c23); Serial.print(buffer); //|
+  load((char*)&c23); Serial.print(buffer); //Separator |
   load((char*)&sensor); Serial.print(buffer); //SENSOR
-  load((char*)&c23); Serial.print(buffer); //|
+  load((char*)&c23); Serial.print(buffer); //Separator |
   Serial.print(voltage[0]);
   Serial.print(voltage[1]);
   Serial.print(voltage[2]);
   Serial.print(voltage[3]);
-  load((char*)&c23); Serial.print(buffer); //|
-  load((char*)&c34); Serial.print(buffer); //00
-  load((char*)&c23); Serial.print(buffer); //|
+  load((char*)&c23); Serial.print(buffer); //Separator |
+  Serial.write(flags); BIT_CLEAR(flags,FLAGS_ALARM_NOW);
+  Serial.print(delim[1]);
+  load((char*)&c23); Serial.print(buffer); //Separator |
 
   Serial1.print(buffer);
-  for (byte i = 0; i < cycles; i++)
+  for (byte i = 0; i < CYCLES; i++)
   {
     readMemoryPacket(i);
-    for (byte j = 0; j < packet; j++) Serial.write(memory[j]);
+    for (byte j = 0; j < PACKET; j++) Serial.write(memory[j]);
     Serial1.print(i);
     Serial1.print(buffer);
   }
@@ -581,7 +659,7 @@ void BTSDateTime()
       pvt.hour   = convert(i + 30, 2);
       pvt.minute = convert(i + 33, 2);
       pvt.second = convert(i + 36, 2);
-      pvt.numSV  = btssat;
+      pvt.numSV  = BTSSAT;
 
       analyzed = true;
       break;
@@ -629,7 +707,7 @@ bool repeatingCoordinates()
 
 word memoryAddress(byte where)
 {
-  return where * mpacket + mshift;
+  return where * MPACKET + MSHIFT;
 }
 
 byte highAddressByte(word address)
@@ -654,7 +732,7 @@ void writeMemoryPacket(byte where)
   Wire1.write(highAddressByte(memoryAddress(where)));
   Wire1.write(lowAddressByte(memoryAddress(where)));
 
-  for (byte i = 0; i < packet; i++) {
+  for (byte i = 0; i < PACKET; i++) {
     Wire1.write(memory[i]);
   }
 
@@ -669,9 +747,9 @@ void readMemoryPacket(byte where)
   Wire1.write(lowAddressByte(memoryAddress(where)));
   Wire1.endTransmission();
 
-  Wire1.requestFrom(address, packet);
+  Wire1.requestFrom(address, PACKET);
 
-  for (byte i = 0; i < packet; i++) {
+  for (byte i = 0; i < PACKET; i++) {
     memory[i] = Wire1.read();
   }
 }
@@ -705,18 +783,17 @@ unsigned long displayMemoryPacket(byte where)
 
 void displayAllMemoryPackets()
 {
-  for (byte i = 0; i < cycles; i++) displayMemoryPacket(i);
+  for (byte i = 0; i < CYCLES; i++) displayMemoryPacket(i);
 }
 
 void updateCurrent()
 {
   unsigned long dt;
   unsigned long old = 0;
-  word where;
 
   load((char*)&c49); Serial1.println(buffer); //Scanning flash memory
 
-  for (byte i = 0; i < cycles; i++)
+  for (byte i = 0; i < CYCLES; i++)
   {
     dt = displayMemoryPacket(i);
     if (dt == 4294967295)
@@ -731,7 +808,7 @@ void updateCurrent()
     }
   }
 
-  if (current < 0 || current >= cycles) current = 0;
+  if (current < 0 || current >= CYCLES) current = 0;
 
   load((char*)&c50); Serial1.print(buffer); //Next cycle:
   Serial1.println(current);
