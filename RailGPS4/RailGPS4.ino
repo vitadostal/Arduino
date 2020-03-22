@@ -23,6 +23,7 @@
 #define before 14                                          //wake Ublox before measure [s]
 #define interval 123                                       //interval between measures [s]
 #define gpsmodule 1                                        //listen to GPS module
+#define btscheck 1                                         //listen to GPS module
 
 #define SDA_PORT PORTA                                     //AT24C32 SDA port
 #define SCL_PORT PORTA                                     //AT24C32 SCL port
@@ -391,7 +392,7 @@ void gprs() {
     voltage[2] = buffer[comma + 3];
     voltage[3] = buffer[comma + 4];
   }
-  if (!signal)
+  if (!signal && btscheck)
   {
     load((char*)&c42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
     load((char*)&c43); communicate(); //AT+SAPBR=3,1,"APN","internet"
