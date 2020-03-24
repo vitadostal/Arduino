@@ -3,9 +3,6 @@
 //Hardware required: Attiny 1634 & AT24C32 & UbloxNeo & SIM800L (FW 1418B05SIM800L24)
 
 // helper functions for string handling in preprocessor phase
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
-
 #define GPSBAUD 4800
 #define SIMBAUD 4800
 #define SERBAUD 9600
@@ -81,11 +78,10 @@ const char c3[]     PROGMEM = "AT+CSTT=\"internet\",\"\",\"\"";
 const char c4[]     PROGMEM = "AT+CIICR";
 const char c5[]     PROGMEM = "AT+CIPSTATUS";
 const char c6[]     PROGMEM = "AT+CIFSR";
-
-//The CIPSEND size must match precisely! CYCLES * PACKET + 223, for example: 39->730 69->1120 126->1861,
+// The CIPSEND size must match precisely! CYCLES * PACKET + 223, for example: 39->730 69->1120 126->1861,
 // It is also necessary to deduct number of \0 bytes used as terminators for null terminated strings
 // 157 is magick constatn that covers all http protocol headers etc.
-const char c7[]     PROGMEM = "AT+CIPSEND=" STR(PACKETS + 157 + sizeof(SERVER) + sizeof(SERVERPATH) + sizeof(SENSOR) + sizeof(APIKEY) - 4);
+const char c7[]     PROGMEM = "AT+CIPSEND=0"; // not used, value is computed dynamically (not easy to compute + concatenate to string at compile time)
 const char c8[]     PROGMEM = "AT+CIPQSEND=1";
 const char c9[]     PROGMEM = "AT+CIPCLOSE";
 const char c10[]    PROGMEM = "AT+CIPSHUT";
@@ -468,7 +464,9 @@ void gprs() {
   load((char*)&c0);  communicate(); //AT
   load((char*)&c0);  communicate(); //AT
   load((char*)&c8);  communicate(); //AT+CIPQSEND=1
-  load((char*)&c7);  communicate(); //AT+CIPSEND=size
+  // 157 is magick constant that covers all http protocol headers etc.
+  sprintf(buffer, "AT+CIPSEND=%d", PACKETS + 157 + strlen(SERVER) + strlen(SERVERPATH) + strlen(SENSOR) + strlen(APIKEY));
+  communicate(); //AT+CIPSEND=size
   if (!fail) {
     delay(2000);
     trasmit();
