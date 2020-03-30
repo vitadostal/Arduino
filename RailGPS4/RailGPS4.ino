@@ -2,9 +2,8 @@
 //Vitezslav Dostal | started 30.10.2019
 //Hardware required: Attiny 1634 & AT24C32 & UbloxNeo & SIM800L (FW 1418B05SIM800L24)
 
-// helper functions for string handling in preprocessor phase
 #define GPSBAUD 4800
-#define SIMBAUD 4800
+#define SIMBAUD 9600
 #define SERBAUD 9600
 #define BTNSEND 0
 #define SIMRESET 2
@@ -17,44 +16,44 @@
 
 #define CYCLES 69                                          //Measures stored in flash memory
 #define PACKET 13                                          //Size of one measure in bytes
-#define PACKETS CYCLES*PACKET                              // computed size of all packets
+#define PACKETS CYCLES * PACKET                            //Size of all measures in bytes
 #define MPACKET 32                                         //Size of one measure in flash memory in bytes
 #define MSHIFT 0                                           //Flash memory shift in bytes
 
 #ifndef MODULO
-#define MODULO 3                                           //number of measures when sending is triggered
+#define MODULO 3                                           //Number of measures when sending is triggered
 #endif
 
 #ifndef SLEEPSAT
-#define SLEEPSAT 8                                         //number of satellites to enable GPS sleeping
+#define SLEEPSAT 8                                         //Number of satellites to enable GPS sleeping
 #endif
 
-#define BEFORE 14                                          //wake Ublox BEFORE measure [s]
+#define BEFORE 14                                          //Wake Ublox before measure [s]
 
 #ifndef INTERVAL
-#define INTERVAL 123                                       //INTERVAL between measures [s]
+#define INTERVAL 123                                       //Interval between measures [s]
 #endif
 
-#define GPSMODULE 1                                        //listen to GPS module
+#define GPSMODULE 1                                        //Listen to GPS module
 
 #ifndef BTSCHECK
-#define BTSCHECK 1                                         //use SIM module capabilities to compute position (triangulation)
+#define BTSCHECK 1                                         //Use SIM module capabilities to compute position (triangulation)
 #endif
 
 #ifndef SENSOR
-#define SENSOR ""                                        // Sensor identification
+#define SENSOR ""                                          //Sensor identification
 #endif
 
 #ifndef SERVER
-#define SERVER ""                                          // Processing server
+#define SERVER ""                                          //Processing server URL
 #endif
 
 #ifndef SERVERPATH
-#define SERVERPATH "/script/measure_add_gps2.php"         // Processing server
+#define SERVERPATH "/script/measure_add_gps2.php"          //Processing script path
 #endif
 
 #ifndef APIKEY
-#define APIKEY ""                                          // API write key
+#define APIKEY ""                                          //API write key
 #endif
 
 #define SDA_PORT PORTA                                     //AT24C32 SDA port
@@ -62,7 +61,7 @@
 #define SDA_PIN 1                                          //AT24C32 SDA port pin
 #define SCL_PIN 2                                          //AT24C32 SCL port pin
 
-const char sensor[] PROGMEM = SENSOR;                    //Sensor indentification
+const char sensor[] PROGMEM = SENSOR;                      //Sensor indentification
 const char server[] PROGMEM = SERVER;                      //Processing server
 const char key[]    PROGMEM = APIKEY;                      //API write key
 
@@ -72,22 +71,19 @@ const int  address  PROGMEM = 0x50;                        //Memory chip address
 #include <SoftwareSerial.h>
 
 const char c0[]     PROGMEM = "AT";
-const char c1[]     PROGMEM = "AT+IPR=4800";               //The speed must be set also here!
+const char c1[]     PROGMEM = "AT+IPR=";
 const char c2[]     PROGMEM = "AT+CBC";
 const char c3[]     PROGMEM = "AT+CSTT=\"internet\",\"\",\"\"";
 const char c4[]     PROGMEM = "AT+CIICR";
 const char c5[]     PROGMEM = "AT+CIPSTATUS";
 const char c6[]     PROGMEM = "AT+CIFSR";
-// The CIPSEND size must match precisely! CYCLES * PACKET + 223, for example: 39->730 69->1120 126->1861,
-// It is also necessary to deduct number of \0 bytes used as terminators for null terminated strings
-// 157 is magick constatn that covers all http protocol headers etc.
-const char c7[]     PROGMEM = "AT+CIPSEND=0"; // not used, value is computed dynamically (not easy to compute + concatenate to string at compile time)
+const char c7[]     PROGMEM = "AT+CIPSEND";
 const char c8[]     PROGMEM = "AT+CIPQSEND=1";
 const char c9[]     PROGMEM = "AT+CIPCLOSE";
 const char c10[]    PROGMEM = "AT+CIPSHUT";
 const char c11[]    PROGMEM = "AT+CSCLK=2";
 const char c12[]    PROGMEM = "AT+CIPSTART=\"TCP\",\"";
-const char c16[]    PROGMEM = "POST " SERVERPATH " HTTP/1.1";
+const char c16[]    PROGMEM = "POST "SERVERPATH" HTTP/1.1";
 const char c17[]    PROGMEM = "\r\n";
 const char c18[]    PROGMEM = "Host: ";
 const char c19[]    PROGMEM = "User-Agent: ArduinoSIM800";
@@ -412,14 +408,20 @@ void load(char* which) {
   strcpy_P(buffer, which);
 }
 
+void loadAtPosition(const char* what, byte position) {
+  sprintf(temp, "%d", what);
+  memcpy(&buffer[position], &temp, strlen(temp));
+  memcpy(&buffer[position] + strlen(temp), '\0', 1);
+}
+
 void gprs() {
   Serial1.println();
   load((char*)&c0);  Serial.println(buffer); delay(500);
 
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c53);  communicate(); //AT-ver
-  load((char*)&c1);  communicate(); //AT+IPR=9600
-  load((char*)&c2);  communicate(); //AT+CBC
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c53); communicate(); //AT-ver
+  load((char*)&c1); loadAtPosition(SIMBAUD, 7); communicate(); //AT+IPR=4800
+  load((char*)&c2); communicate(); //AT+CBC
   if (comma < 50)
   {
     voltage[0] = buffer[comma + 1];
@@ -452,24 +454,25 @@ void gprs() {
     load((char*)&c47); communicate(); //AT+SAPBR=0,1
   }
   signal = false;
-  load((char*)&c3);  communicate(); //AT+CSTT="internet","",""
-  load((char*)&c4);  communicate(); //AT+CIICR
-  load((char*)&c5);  communicate(); //AT+CIPSTATUS
-  load((char*)&c6);  communicate(); //AT+CIFSR
+  load((char*)&c3); communicate(); //AT+CSTT="internet","",""
+  load((char*)&c4); communicate(); //AT+CIICR
+  load((char*)&c5); communicate(); //AT+CIPSTATUS
+  load((char*)&c6); communicate(); //AT+CIFSR
   modify = true;
   load((char*)&c12); communicate(); //AT+CIPSTART="TCP","",80
   modify = false;
   if (!fail) delay (3000);
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c0);  communicate(); //AT
-  load((char*)&c8);  communicate(); //AT+CIPQSEND=1
-  // 157 is magick constant that covers all http protocol headers etc.
-  sprintf(buffer, "AT+CIPSEND=%d", PACKETS + 157 + strlen(SERVER) + strlen(SERVERPATH) + strlen(SENSOR) + strlen(APIKEY));
-  communicate(); //AT+CIPSEND=size
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c0); communicate(); //AT
+  load((char*)&c8); communicate(); //AT+CIPQSEND=1
+  load((char*)&c7); communicate(); //AT+CIPSEND
   if (!fail) {
     delay(2000);
     trasmit();
+    Serial.print(delim);
+    Serial.print(delim);
+    Serial.print(delim);
     delay(2000);
   }
   load((char*)&c32); communicate(); //AT+CIPSEND?
@@ -550,21 +553,21 @@ void receiveCommand()
 void trasmit()
 {
   load((char*)&c16); Serial.print(buffer); //POST /script/measure_add_gps2.php HTTP/1.1
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c18); Serial.print(buffer); //Host:
   load((char*)&server); Serial.print(buffer); //SERVER
-  load((char*)&c17); Serial.print(buffer); //LINE
-  load((char*)&c19); Serial.print(buffer); //User-Agent: Arduinosim800
+  load((char*)&c17); Serial.print(buffer);
+  load((char*)&c19); Serial.print(buffer); //User-Agent: ArduinoSIM800
   load((char*)&sensor); Serial.print(buffer); //SENSOR
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c20); Serial.print(buffer); //Connection: close
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c21); Serial.print(buffer); //Content-Type: application/x-www-form-urlencoded
-  load((char*)&c17); Serial.print(buffer); //LINE
+  load((char*)&c17); Serial.print(buffer);
   load((char*)&c22); Serial.print(buffer); //Content-Length:
-  Serial.print(PACKETS + strlen(APIKEY) + strlen(SENSOR) + 4 + 2 + 4 * 1); // Content + Key + Sensor + Voltage + Battery + Delimiters
-  load((char*)&c17); Serial.print(buffer); //LINE
-  load((char*)&c17); Serial.print(buffer); //LINE
+  Serial.print(PACKETS + strlen(APIKEY) + strlen(SENSOR) + 4 + 2 + 4); // Content + Key + Sensor + Voltage + Flags + Delimiters
+  load((char*)&c17); Serial.print(buffer);
+  load((char*)&c17); Serial.print(buffer);
 
   load((char*)&key); Serial.print(buffer); //KEY
   load((char*)&c23); Serial.print(buffer); //|
