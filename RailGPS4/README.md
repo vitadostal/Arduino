@@ -1,5 +1,7 @@
 # RailGPS4
 
+See [specification of communication protocol](doc/protocol.md)
+
 # How to build and flash
 
 ## In platform.io:
