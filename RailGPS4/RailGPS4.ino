@@ -5,9 +5,9 @@
 #define GPSBAUD 4800
 #define SIMBAUD 9600
 #define SERBAUD 9600
-#define BTNSEND 0
+#define BTNSEND 3
 #define SIMRESET 2
-#define BTNMEASURE 3
+#define BTNMEASURE 0
 #define GPSTX 4
 #define GPSRX 5
 #define FLASHSCL 6
@@ -101,7 +101,6 @@ const char c30[]    PROGMEM = ">>> ";
 const char c31[]    PROGMEM = "Modem reset";
 const char c32[]    PROGMEM = "AT+CIPSEND?";
 const char c33[]    PROGMEM = "AT+CIPCLOSE";
-const char c34[]    PROGMEM = "00";
 const char c35[]    PROGMEM = "4200";
 const char c36[]    PROGMEM = "\",80";
 const char c37[]    PROGMEM = "AT+CPOWD=1";
@@ -135,6 +134,8 @@ bool fail = false;
 bool modify = false;
 bool success = false;
 bool signal = false;
+bool btnMeasureLast = false;
+bool btnSendLast = false;
 byte analyze = 0;
 bool analyzed = false;
 byte current = 0;
@@ -186,8 +187,19 @@ struct NAV_PVT {
   short reserved2;             // Reserved
   unsigned long reserved3;     // Reserved
 };
-
 NAV_PVT pvt;
+
+struct FLAGS {
+  int alarmPast: 1;
+  int alarmNow: 1;
+  int reserved1: 1;
+  int reserved2: 1;
+  int reserved3: 1;
+  int reserved4: 1;
+  int reserved5: 1;
+  int reserved6: 1;
+};
+FLAGS flags;
 
 void calcChecksum(unsigned char* CK) {
   memset(CK, 0, 2);
@@ -293,6 +305,8 @@ void setup()
   delim[1] = 0x00;
   if (BTNMEASURE) pinMode(BTNMEASURE, INPUT_PULLUP);
   if (BTNSEND) pinMode(BTNSEND, INPUT_PULLUP);
+  btnMeasureLast = true;
+  btnSendLast = true;
   pinMode(FLASHSCL, INPUT_PULLUP);
   pinMode(FLASHSDA, INPUT_PULLUP);
   Wire1.begin();
@@ -309,19 +323,37 @@ void loop()
   delay(100);
 
   //Early measure
-  if (BTNMEASURE && digitalRead(BTNMEASURE) == LOW)
-  {
-    load((char*)&c39); Serial1.println(buffer); //Measure button pressed
-    ublox.write(0xFF);
-    delay(10000);
-    measure();
+  if (BTNMEASURE) {
+    if (!btnMeasureLast) {
+      if (digitalRead(BTNMEASURE) == HIGH) {
+        btnMeasureLast = true;
+        load((char*)&c39); Serial1.println(buffer); //Measure button pressed
+        ublox.write(0xFF);
+        delay(10000);
+        measure();
+      }
+    } else {
+      if (digitalRead(BTNMEASURE) == LOW) {
+        btnMeasureLast = false;
+      }
+    }
   }
 
   //Early send
-  if (BTNSEND && digitalRead(BTNSEND) == LOW)
-  {
-    load((char*)&c40); Serial1.println(buffer); //Send button pressed
-    gprs();
+  if (BTNSEND) {
+    if (!btnSendLast) {
+      if (digitalRead(BTNSEND) == HIGH) {
+        btnSendLast = true;
+        flags.alarmPast = true;
+        flags.alarmNow = true;
+        load((char*)&c40); Serial1.println(buffer); //Send button pressed
+        gprs();
+      }
+    } else {
+      if (digitalRead(BTNSEND) == LOW) {
+        btnSendLast = false;
+      }
+    }
   }
 
   if (millis() - timer > wait * 1000) measure();
@@ -471,8 +503,6 @@ void gprs() {
     delay(2000);
     trasmit();
     Serial.print(delim);
-    Serial.print(delim);
-    Serial.print(delim);
     delay(2000);
   }
   load((char*)&c32); communicate(); //AT+CIPSEND?
@@ -570,16 +600,17 @@ void trasmit()
   load((char*)&c17); Serial.print(buffer);
 
   load((char*)&key); Serial.print(buffer); //KEY
-  load((char*)&c23); Serial.print(buffer); //|
+  load((char*)&c23); Serial.print(buffer); //Separator |
   load((char*)&sensor); Serial.print(buffer); //SENSOR
-  load((char*)&c23); Serial.print(buffer); //|
+  load((char*)&c23); Serial.print(buffer); //Separator |
   Serial.print(voltage[0]);
   Serial.print(voltage[1]);
   Serial.print(voltage[2]);
   Serial.print(voltage[3]);
-  load((char*)&c23); Serial.print(buffer); //|
-  load((char*)&c34); Serial.print(buffer); //00
-  load((char*)&c23); Serial.print(buffer); //|
+  load((char*)&c23); Serial.print(buffer); //Separator |
+  Serial.write((byte*)&flags, 1); flags.alarmNow = false;
+  Serial.print(delim[1]);
+  load((char*)&c23); Serial.print(buffer); //Separator |
 
   Serial1.print(buffer);
   for (byte i = 0; i < CYCLES; i++)
