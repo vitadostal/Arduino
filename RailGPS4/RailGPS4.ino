@@ -2,6 +2,12 @@
 //Vitezslav Dostal | started 30.10.2019
 //Hardware required: Attiny 1634 & AT24C32 & UbloxNeo & SIM800L (FW 1418B05SIM800L24)
 
+// Bit manipulation macros
+#define BIT_SET(byte,nbit)   byte |=  (1 << nbit)
+#define BIT_CLEAR(byte,nbit) byte &= ~(1 << nbit)
+#define BIT_FLIP(byte,nbit)  byte ^=  (1 << nbit)
+#define BIT_CHECK(byte,nbit) byte &   (1 << nbit)
+
 #define GPSBAUD 4800
 #define SIMBAUD 9600
 #define SERBAUD 9600
@@ -67,6 +73,9 @@
 #define SCL_PORT PORTA                                     //AT24C32 SCL port
 #define SDA_PIN 1                                          //AT24C32 SDA port pin
 #define SCL_PIN 2                                          //AT24C32 SCL port pin
+
+#define FLAGS_ALARM_PAST 0                                 //Position of flag bit - alarm was activated in the past
+#define FLAGS_ALARM_NOW 1                                  //Position of flag bit - alarm was activated right now
 
 const char sensor[] PROGMEM = SENSOR;                      //Sensor indentification
 const char server[] PROGMEM = SERVER;                      //Processing server
@@ -196,17 +205,7 @@ struct NAV_PVT {
 };
 NAV_PVT pvt;
 
-struct FLAGS {
-  int alarmPast: 1;
-  int alarmNow: 1;
-  int reserved1: 1;
-  int reserved2: 1;
-  int reserved3: 1;
-  int reserved4: 1;
-  int reserved5: 1;
-  int reserved6: 1;
-};
-FLAGS flags;
+byte flags;
 
 void calcChecksum(unsigned char* CK) {
   memset(CK, 0, 2);
@@ -351,8 +350,8 @@ void loop()
     if (!btnSendLast) {
       if (digitalRead(BTNSEND) == HIGH) {
         btnSendLast = true;
-        flags.alarmPast = true;
-        flags.alarmNow = true;
+        BIT_SET(flags,FLAGS_ALARM_PAST);
+        BIT_SET(flags,FLAGS_ALARM_NOW);
         load((char*)&c40); Serial1.println(buffer); //Send button pressed
         gprs();
       }
@@ -602,7 +601,7 @@ void trasmit()
   load((char*)&c21); Serial.print(buffer); //Content-Type: application/x-www-form-urlencoded
   load((char*)&c17); Serial.print(buffer);
   load((char*)&c22); Serial.print(buffer); //Content-Length:
-  Serial.print(PACKETS + strlen(APIKEY) + strlen(SENSOR) + 4 + 2 + 4); // Content + Key + Sensor + Voltage + Flags + Delimiters
+  Serial.print(PACKETS + strlen(APIKEY) + strlen(SENSOR) + 4 + 1 + 4); // Content + Key + Sensor + Voltage + Flags + Delimiters
   load((char*)&c17); Serial.print(buffer);
   load((char*)&c17); Serial.print(buffer);
 
@@ -615,7 +614,7 @@ void trasmit()
   Serial.print(voltage[2]);
   Serial.print(voltage[3]);
   load((char*)&c23); Serial.print(buffer); //Separator |
-  Serial.write((byte*)&flags, 1); flags.alarmNow = false;
+  Serial.write(flags); BIT_CLEAR(flags,FLAGS_ALARM_NOW);
   Serial.print(delim[1]);
   load((char*)&c23); Serial.print(buffer); //Separator |
 
@@ -790,7 +789,6 @@ void updateCurrent()
 {
   unsigned long dt;
   unsigned long old = 0;
-  word where;
 
   load((char*)&c49); Serial1.println(buffer); //Scanning flash memory
 
