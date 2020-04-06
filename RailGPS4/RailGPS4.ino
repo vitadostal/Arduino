@@ -14,7 +14,10 @@
 #define FLASHSDA 7
 #define BTSSAT 100
 
+#ifndef CYCLES
 #define CYCLES 69                                          //Measures stored in flash memory
+#endif
+
 #define PACKET 13                                          //Size of one measure in bytes
 #define PACKETS CYCLES * PACKET                            //Size of all measures in bytes
 #define MPACKET 32                                         //Size of one measure in flash memory in bytes
@@ -46,6 +49,10 @@
 
 #ifndef SERVER
 #define SERVER ""                                          //Processing server URL
+#endif
+
+#ifndef SERVERPORT
+#define SERVERPORT "80"                                    //Processing server port
 #endif
 
 #ifndef SERVERPATH
@@ -83,7 +90,7 @@ const char c9[]     PROGMEM = "AT+CIPCLOSE";
 const char c10[]    PROGMEM = "AT+CIPSHUT";
 const char c11[]    PROGMEM = "AT+CSCLK=2";
 const char c12[]    PROGMEM = "AT+CIPSTART=\"TCP\",\"";
-const char c16[]    PROGMEM = "POST "SERVERPATH" HTTP/1.1";
+const char c16[]    PROGMEM = "POST " SERVERPATH " HTTP/1.1";
 const char c17[]    PROGMEM = "\r\n";
 const char c18[]    PROGMEM = "Host: ";
 const char c19[]    PROGMEM = "User-Agent: ArduinoSIM800";
@@ -102,7 +109,7 @@ const char c31[]    PROGMEM = "Modem reset";
 const char c32[]    PROGMEM = "AT+CIPSEND?";
 const char c33[]    PROGMEM = "AT+CIPCLOSE";
 const char c35[]    PROGMEM = "4200";
-const char c36[]    PROGMEM = "\",80";
+const char c36[]    PROGMEM = "\"," SERVERPORT;
 const char c37[]    PROGMEM = "AT+CPOWD=1";
 const char c38[]    PROGMEM = "No GPS";
 const char c39[]    PROGMEM = "Measure button";
