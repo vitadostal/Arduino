@@ -93,7 +93,7 @@ const char c3[]     PROGMEM = "AT+CSTT=\"internet\",\"\",\"\"";
 const char c4[]     PROGMEM = "AT+CIICR";
 const char c5[]     PROGMEM = "AT+CIPSTATUS";
 const char c6[]     PROGMEM = "AT+CIFSR";
-const char c7[]     PROGMEM = "AT+CIPSEND=0"; // not used, value is computed dynamically (not easy to compute + concatenate to string at compile time)
+const char c7[]     PROGMEM = "AT+CIPSEND=0"; //Not used, value is computed dynamically (not easy to compute + concatenate to string at compile time)
 const char c8[]     PROGMEM = "AT+CIPQSEND=1";
 const char c9[]     PROGMEM = "AT+CIPCLOSE";
 const char c10[]    PROGMEM = "AT+CIPSHUT";
@@ -504,12 +504,11 @@ void gprs() {
   load((char*)&c0); communicate(); //AT
   load((char*)&c0); communicate(); //AT
   load((char*)&c8); communicate(); //AT+CIPQSEND=1
-  // 157 is magick constant that covers all http protocol headers etc.
-  sprintf(buffer, "AT+CIPSEND=%d", PACKETS + 157 + strlen(SERVER) + strlen(SERVERPATH) + strlen(SENSOR) + strlen(APIKEY));
-  communicate(); //AT+CIPSEND=size
+  //157 is a magic constant that covers all http protocol headers etc.
   if (!fail) {
     delay(2000);
     trasmit();
+    Serial.print(delim);
     delay(2000);
   }
   load((char*)&c32); communicate(); //AT+CIPSEND?
