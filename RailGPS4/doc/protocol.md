@@ -15,7 +15,7 @@ where:
 * FLAGS (?) - bytes of bit flags, only one byte is used currently, bit layout:
   * bit 0 - alarm was activated in the past
   * bit 1 - alarm was activated right now - transmitted only once in message
-    that is sent on alarm activation
+    that is triggered by alarm activation
   * bit 2 - unused
   * bit 3 - unused
   * bit 4 - unused
