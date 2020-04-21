@@ -505,10 +505,11 @@ void gprs() {
   load((char*)&c0); communicate(); //AT
   load((char*)&c8); communicate(); //AT+CIPQSEND=1
   //157 is a magic constant that covers all http protocol headers etc.
+  sprintf(buffer, "AT+CIPSEND=%d", PACKETS + 157 + strlen(SERVER) + strlen(SERVERPATH) + strlen(SENSOR) + strlen(APIKEY));
+  communicate(); //AT+CIPSEND=size  
   if (!fail) {
     delay(2000);
     trasmit();
-    Serial.print(delim);
     delay(2000);
   }
   load((char*)&c32); communicate(); //AT+CIPSEND?
