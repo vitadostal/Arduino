@@ -30,20 +30,24 @@
 #define MSHIFT 0                                           //Flash memory shift in bytes
 
 #ifndef MODULO
-#define MODULO 3                                           //Number of measures when sending is triggered
+#define MODULO 3                                           //Number of measures followed by data sending
 #endif
 
 #ifndef SLEEPSAT
 #define SLEEPSAT 8                                         //Number of satellites to enable GPS sleeping
 #endif
 
-#define BEFORE 14                                          //Wake Ublox before measure [s]
-
-#ifndef INTERVAL
-#define INTERVAL 123                                       //Interval between measures [s]
+#ifndef BEFORE
+#define BEFORE 15                                          //Wake Ublox before measure [s]
 #endif
 
+#ifndef INTERVAL
+#define INTERVAL 121                                       //Interval between measures [s]
+#endif
+
+#ifndef GPSMODULE
 #define GPSMODULE 1                                        //Listen to GPS module
+#endif
 
 #ifndef BTSCHECK
 #define BTSCHECK 1                                         //Use SIM module capabilities to compute position (triangulation)
@@ -93,7 +97,6 @@ const char c3[]     PROGMEM = "AT+CSTT=\"internet\",\"\",\"\"";
 const char c4[]     PROGMEM = "AT+CIICR";
 const char c5[]     PROGMEM = "AT+CIPSTATUS";
 const char c6[]     PROGMEM = "AT+CIFSR";
-const char c7[]     PROGMEM = "AT+CIPSEND=0"; //Not used, value is computed dynamically (not easy to compute + concatenate to string at compile time)
 const char c8[]     PROGMEM = "AT+CIPQSEND=1";
 const char c9[]     PROGMEM = "AT+CIPCLOSE";
 const char c10[]    PROGMEM = "AT+CIPSHUT";
@@ -138,7 +141,8 @@ const char c52[]    PROGMEM = " time: ";
 const char c53[]    PROGMEM = "AT+CGMR";
 const char c54[]    PROGMEM = "AT+CLBSCFG=1,3,\"lbs-simcom.com:3002\"";
 const char c55[]    PROGMEM = "AT+CLBSCFG=0,3";
-const char c56[]    PROGMEM = "AT+CIPGSMLOC=1,1";
+const char c56[]    PROGMEM = "AT+CIPGSMLOC=2,1";
+const char c57[]    PROGMEM = "Timestamp: ";
 
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 const unsigned long wait = INTERVAL;
@@ -160,6 +164,7 @@ byte comma = 0;
 long lastlat = 0;
 long lastlon = 0;
 unsigned long timer;
+unsigned int limit = 10000;
 char delim[2];
 
 SoftwareSerial ublox(GPSRX, GPSTX);
@@ -477,15 +482,15 @@ void gprs() {
 
     for (byte i = 0; i < 7; i++)
     {
-      load((char*)&c56); communicate(); //AT+CIPGSMLOC=1,1
+      load((char*)&c56); communicate(); //AT+CIPGSMLOC=2,1
       load((char*)&c0); analyze = 2; communicate(); //AT
       if (analyzed) break;
     }
 
-    for (byte i = 0; i < 7; i++)
+    if (analyzed) for (byte i = 0; i < 7; i++)
     {
-      load((char*)&c46); communicate(); //AT+CLBS=4,1
-      load((char*)&c0); analyze = 3; communicate(); //AT
+      load((char*)&c46); limit = 30000; communicate(); //AT+CLBS=4,1
+      load((char*)&c0); analyze = 3; limit = 30000; communicate(); //AT
       if (analyzed) break;
     }
 
@@ -561,29 +566,40 @@ void receiveCommand()
   char thischar = 0;
   stamp = millis();
   byte i = 1;
+  byte j = 0;
+  buffer[0] = '#';
 
-  while (!Serial.available() && millis() < stamp + 10000) {
-    delay (50);
+  while (!Serial.available() && millis() < stamp + limit);
+  if (millis() >= stamp + limit)
+  {
+    fail = true;
   }
-  if (millis() > stamp + 10000) fail = true;
-  delay (100);
-
-  while (Serial.available()) {
-    thischar = Serial.read();
-    Serial1.write(thischar);
-
-    buffer[i] = thischar;
-    if (buffer[i - 1] == 'O' && buffer[i] == 'K') success = true;
-    if (buffer[i] == ',') comma = i;
-
-    i++;
-    if (i >= 60) i = 1;
+  else
+  {
+    for (j = 0; j < 20; j++) {
+      while (Serial.available()) {
+        thischar = Serial.read();
+    
+        buffer[i] = thischar;
+        if (buffer[i - 1] == 'O' && buffer[i] == 'K') success = true;
+        if (buffer[i] == ',') comma = i;
+    
+        i++;
+        if (i > 62) i = 1;
+      }
+      delay(10);
+    }
+  
+    buffer[i] = delim[1];
+    Serial1.write(buffer);
+  
+    if (analyze == 1) BTSServer();
+    if (analyze == 2) BTSDateTime();
+    if (analyze == 3) BTSLocation();
   }
-  if (analyze == 1) BTSServer();
-  if (analyze == 2) BTSDateTime();
-  if (analyze == 3) BTSLocation();
 
   analyze = 0;
+  limit = 10000;
   Serial1.println();
 }
 
@@ -635,10 +651,9 @@ void trasmit()
 
 void BTSServer()
 {
-  for (byte i = 7; i++; i <= 30)
+  for (byte i = 0; i <= 30; i++)
   {
-    if (buffer[i - 7] == 'c' && buffer[i - 6] == '4' && buffer[i - 5] == 'a' && buffer[i - 4] == '.' && buffer[i - 3] == 'c'
-        && buffer[i - 2] == 'o' && buffer[i - 1] == 'm' && buffer[i] == '.')
+    if (search(i, "c4a.com", 7))
     {
       load((char*)&c54); communicate(); //AT+CLBSCFG=1,3,"lbs-simcom.com:3002"
     }
@@ -648,18 +663,33 @@ void BTSServer()
 void BTSDateTime()
 {
   analyzed = false;
-  for (byte i = 7; i++; i <= 30)
+  for (byte i = 0; i <= 30; i++)
   {
-    if (buffer[i - 6] == 'L' && buffer[i - 5] == 'O' && buffer[i - 4] == 'C' && buffer[i - 3] == ':'
-        && buffer[i - 2] == ' ' && buffer[i - 1] == '0' && buffer[i] == ',' && buffer[i + 29] == ',' && buffer[i + 35] == ':')
+    if (search(i, "GSMLOC: 0,", 10))
     {
-      pvt.year   = convert(i + 19, 4);
-      pvt.month  = convert(i + 24, 2);
-      pvt.day    = convert(i + 27, 2);
-      pvt.hour   = convert(i + 30, 2);
-      pvt.minute = convert(i + 33, 2);
-      pvt.second = convert(i + 36, 2);
+      pvt.year   = convert(i + 10, 4);
+      pvt.month  = convert(i + 15, 2);
+      pvt.day    = convert(i + 18, 2);
+      pvt.hour   = convert(i + 21, 2);
+      pvt.minute = convert(i + 24, 2);
+      pvt.second = convert(i + 27, 2);
       pvt.numSV  = BTSSAT;
+
+      Serial1.println();
+      Serial1.println();
+      load((char*)&c57); Serial1.print(buffer); //Timestamp:
+      Serial1.print(pvt.day);
+      Serial1.print(".");
+      Serial1.print(pvt.month);
+      Serial1.print(".");
+      Serial1.print(pvt.year);
+      Serial1.print(" ");      
+      Serial1.print(pvt.hour);
+      Serial1.print(":");      
+      Serial1.print(pvt.minute);
+      Serial1.print(":");      
+      Serial1.print(pvt.second);      
+      Serial1.println();
 
       analyzed = true;
       break;
@@ -670,18 +700,28 @@ void BTSDateTime()
 void BTSLocation()
 {
   analyzed = false;
-  for (byte i = 7; i++; i <= 30)
+  for (byte i = 0; i <= 30; i++)
   {
-    if (buffer[i - 7] == '+' && buffer[i - 6] == 'C' && buffer[i - 5] == 'L' && buffer[i - 4] == 'B' && buffer[i - 3] == 'S'
-        && buffer[i - 2] == ':' && buffer[i - 1] == ' ' && buffer[i] == '0' && buffer[i + 11] == ',' && buffer[i + 21] == ',')
+    if (search(i, "+CLBS: 0,", 9))
     {
-      updateFlashMemory(convert(i + 2, 9) * 10, convert(i + 12, 9) * 10);
+      Serial1.println();
+      Serial1.println();
+      updateFlashMemory(convert(i + 9, 9) * 10, convert(i + 19, 9) * 10);
       memcpy(&buffer, 0, sizeof(buffer));
 
       analyzed = true;
       break;
     }
   }
+}
+
+bool search(byte from, char what[], byte size)
+{
+  for (byte i = 0; i < size; i++)
+  {
+    if (buffer[from + i] != what[i]) return false;
+  }
+  return true;
 }
 
 long convert(byte pos, byte len)
