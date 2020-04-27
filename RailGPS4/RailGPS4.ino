@@ -102,6 +102,7 @@ const char c9[]     PROGMEM = "AT+CIPCLOSE";
 const char c10[]    PROGMEM = "AT+CIPSHUT";
 const char c11[]    PROGMEM = "AT+CSCLK=2";
 const char c12[]    PROGMEM = "AT+CIPSTART=\"TCP\",\"";
+const char c15[]    PROGMEM = "Voltage: ";
 const char c16[]    PROGMEM = "POST " SERVERPATH " HTTP/1.1";
 const char c17[]    PROGMEM = "\r\n";
 const char c18[]    PROGMEM = "Host: ";
@@ -149,7 +150,7 @@ const unsigned long wait = INTERVAL;
 char memory[13];
 char buffer[64];
 char temp[10];
-char voltage[4];
+unsigned int voltage;
 bool fail = false;
 bool modify = false;
 bool success = false;
@@ -160,7 +161,6 @@ byte analyze = 0;
 bool analyzed = false;
 byte current = 0;
 byte iterator = 0;
-byte comma = 0;
 long lastlat = 0;
 long lastlon = 0;
 unsigned long timer;
@@ -464,14 +464,13 @@ void gprs() {
   load((char*)&c0); communicate(); //AT
   load((char*)&c53); communicate(); //AT-ver
   load((char*)&c1); loadAtPosition(SIMBAUD, 7); communicate(); //AT+IPR=4800
-  load((char*)&c2); communicate(); //AT+CBC
-  if (comma < 50)
+
+  for (byte i = 0; i < 7; i++)
   {
-    voltage[0] = buffer[comma + 1];
-    voltage[1] = buffer[comma + 2];
-    voltage[2] = buffer[comma + 3];
-    voltage[3] = buffer[comma + 4];
-  }
+    load((char*)&c2); analyze = 4; communicate(); //AT+CBC
+    if (analyzed) break;
+  }  
+
   if (!signal && BTSCHECK)
   {
     load((char*)&c42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
@@ -496,6 +495,7 @@ void gprs() {
 
     load((char*)&c47); communicate(); //AT+SAPBR=0,1
   }
+
   signal = false;
   load((char*)&c3); communicate(); //AT+CSTT="internet","",""
   load((char*)&c4); communicate(); //AT+CIICR
@@ -582,7 +582,6 @@ void receiveCommand()
     
         buffer[i] = thischar;
         if (buffer[i - 1] == 'O' && buffer[i] == 'K') success = true;
-        if (buffer[i] == ',') comma = i;
     
         i++;
         if (i > 62) i = 1;
@@ -596,6 +595,7 @@ void receiveCommand()
     if (analyze == 1) BTSServer();
     if (analyze == 2) BTSDateTime();
     if (analyze == 3) BTSLocation();
+    if (analyze == 4) Voltage();
   }
 
   analyze = 0;
@@ -626,10 +626,7 @@ void trasmit()
   load((char*)&c23); Serial.print(buffer); //Separator |
   load((char*)&sensor); Serial.print(buffer); //SENSOR
   load((char*)&c23); Serial.print(buffer); //Separator |
-  Serial.print(voltage[0]);
-  Serial.print(voltage[1]);
-  Serial.print(voltage[2]);
-  Serial.print(voltage[3]);
+  Serial.print(voltage);
   load((char*)&c23); Serial.print(buffer); //Separator |
   Serial.write(flags); BIT_CLEAR(flags,FLAGS_ALARM_NOW);
   Serial.print(delim[1]);
@@ -649,6 +646,26 @@ void trasmit()
   load((char*)&c17); Serial.print(buffer); //LINE
 }
 
+void Voltage()
+{
+  analyzed = false;
+  for (byte i = 0; i <= 30; i++)
+  {
+    if (search(i, "+CBC: 0,XX,"))
+    {
+      voltage = convert(i + 11, 4);
+
+      Serial1.println();
+      load((char*)&c15); Serial1.print(buffer); //Voltage:
+      Serial1.print(voltage);
+      Serial1.println();
+
+      analyzed = true;
+      break;
+    }
+  }
+}
+
 void BTSServer()
 {
   for (byte i = 0; i <= 30; i++)
@@ -665,7 +682,7 @@ void BTSDateTime()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "GSMLOC: 0,XXXX/XX/XX,XX:XX:XX"))
+    if (search(i, "GSMLOC: 0,XXXX/XX/XX,XX:XX:"))
     {
       pvt.year   = convert(i + 10, 4);
       pvt.month  = convert(i + 15, 2);
@@ -675,7 +692,6 @@ void BTSDateTime()
       pvt.second = convert(i + 27, 2);
       pvt.numSV  = BTSSAT;
 
-      Serial1.println();
       Serial1.println();
       load((char*)&c57); Serial1.print(buffer); //Timestamp:
       Serial1.print(pvt.day);
@@ -702,9 +718,8 @@ void BTSLocation()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "+CLBS: 0,XX.XXXXXX,XX.XXXXXX"))
+    if (search(i, "+CLBS: 0,XX.XXXXXX,XX.XXXXXX,"))
     {
-      Serial1.println();
       Serial1.println();
       updateFlashMemory(convert(i + 9, 9) * 10, convert(i + 19, 9) * 10);
       memcpy(&buffer, 0, sizeof(buffer));
