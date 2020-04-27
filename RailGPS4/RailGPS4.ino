@@ -653,7 +653,7 @@ void BTSServer()
 {
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "c4a.com", 7))
+    if (search(i, "c4a.com"))
     {
       load((char*)&c54); communicate(); //AT+CLBSCFG=1,3,"lbs-simcom.com:3002"
     }
@@ -665,7 +665,7 @@ void BTSDateTime()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "GSMLOC: 0,", 10))
+    if (search(i, "GSMLOC: 0,XXXX/XX/XX,XX:XX:XX"))
     {
       pvt.year   = convert(i + 10, 4);
       pvt.month  = convert(i + 15, 2);
@@ -702,7 +702,7 @@ void BTSLocation()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "+CLBS: 0,", 9))
+    if (search(i, "+CLBS: 0,XX.XXXXXX,XX.XXXXXX"))
     {
       Serial1.println();
       Serial1.println();
@@ -715,11 +715,11 @@ void BTSLocation()
   }
 }
 
-bool search(byte from, char what[], byte size)
+bool search(byte from, char what[])
 {
-  for (byte i = 0; i < size; i++)
+  for (byte i = 0; i < strlen(what); i++)
   {
-    if (buffer[from + i] != what[i]) return false;
+    if (what[i] != 'X' && buffer[from + i] != what[i]) return false;
   }
   return true;
 }
