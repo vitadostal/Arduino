@@ -21,12 +21,24 @@
 #define BTSSAT 100
 
 #ifndef CYCLES
-#define CYCLES 69                                          //Measures stored in flash memory
+#define CYCLES 256                                         //Measures stored in flash memory
+#endif
+
+#ifndef PRIMARY
+#define PRIMARY 33                                         //Number of measures sent (out of all CYCLES)
+#endif
+
+#ifndef SECONDARY
+#define SECONDARY 60                                       //Another number of measures sent, however, only every STEP-th measure is sent 
+#endif
+
+#ifndef STEP
+#define STEP 3                                             //Step used by SECONDARY
 #endif
 
 #define PACKET 13                                          //Size of one measure in bytes
-#define PACKETS CYCLES * PACKET                            //Size of all measures in bytes
-#define MPACKET 32                                         //Size of one measure in flash memory in bytes
+#define PACKETS PRIMARY * PACKET + SECONDARY * PACKET      //Size of all measures in bytes
+#define MPACKET 16                                         //Size of one measure in flash memory in bytes
 #define MSHIFT 0                                           //Flash memory shift in bytes
 
 #ifndef MODULO
@@ -38,11 +50,11 @@
 #endif
 
 #ifndef BEFORE
-#define BEFORE 15                                          //Wake Ublox before measure [s]
+#define BEFORE 12                                          //Wake Ublox before measure [s]
 #endif
 
 #ifndef INTERVAL
-#define INTERVAL 121                                       //Interval between measures [s]
+#define INTERVAL 61                                        //Interval between measures [s]
 #endif
 
 #ifndef GPSMODULE
@@ -160,6 +172,7 @@ bool btnSendLast = false;
 byte analyze = 0;
 bool analyzed = false;
 byte current = 0;
+byte tact = 0;
 byte iterator = 0;
 long lastlat = 0;
 long lastlon = 0;
@@ -630,20 +643,27 @@ void trasmit()
   load((char*)&c23); Serial.print(buffer); //Separator |
   Serial.write(flags); BIT_CLEAR(flags,FLAGS_ALARM_NOW);
   Serial.print(delim[1]);
-  load((char*)&c23); Serial.print(buffer); //Separator |
-
+  load((char*)&c23); Serial.print(buffer); //Separator |  
   Serial1.print(buffer);
-  for (byte i = 0; i < CYCLES; i++)
-  {
-    readMemoryPacket(i);
-    for (byte j = 0; j < PACKET; j++) Serial.write(memory[j]);
-    Serial1.print(i);
-    Serial1.print(buffer);
-  }
-  Serial1.println();
 
+  for (int i = CYCLES - 1; i >= CYCLES - PRIMARY; i--) transmitPacket(i);
+  for (int i = CYCLES - PRIMARY - 1 - tact; i >= CYCLES - PRIMARY - SECONDARY * STEP; i -= STEP) transmitPacket(i);
+
+  tact++;
+  if (tact >= STEP) tact = 0;
+
+  Serial1.println();
   load((char*)&c17); Serial.print(buffer); //LINE
   load((char*)&c17); Serial.print(buffer); //LINE
+}
+
+void transmitPacket(int i)
+{
+    int which = (i + current) % CYCLES;
+    readMemoryPacket(which);
+    for (byte j = 0; j < PACKET; j++) Serial.write(memory[j]);
+    Serial1.print(which);
+    Serial1.print(buffer);
 }
 
 void Voltage()
@@ -692,20 +712,23 @@ void BTSDateTime()
       pvt.second = convert(i + 27, 2);
       pvt.numSV  = BTSSAT;
 
-      Serial1.println();
-      load((char*)&c57); Serial1.print(buffer); //Timestamp:
-      Serial1.print(pvt.day);
-      Serial1.print(".");
-      Serial1.print(pvt.month);
-      Serial1.print(".");
-      Serial1.print(pvt.year);
-      Serial1.print(" ");      
-      Serial1.print(pvt.hour);
-      Serial1.print(":");      
-      Serial1.print(pvt.minute);
-      Serial1.print(":");      
-      Serial1.print(pvt.second);      
-      Serial1.println();
+      if (!SLEEPSAT)
+      {
+        Serial1.println();
+        load((char*)&c57); Serial1.print(buffer); //Timestamp:
+        Serial1.print(pvt.day);
+        Serial1.print(".");
+        Serial1.print(pvt.month);
+        Serial1.print(".");
+        Serial1.print(pvt.year);
+        Serial1.print(" ");      
+        Serial1.print(pvt.hour);
+        Serial1.print(":");      
+        Serial1.print(pvt.minute);
+        Serial1.print(":");
+        Serial1.print(pvt.second);
+        Serial1.println();
+      }
 
       analyzed = true;
       break;
@@ -838,7 +861,7 @@ unsigned long displayMemoryPacket(byte where)
 
 void displayAllMemoryPackets()
 {
-  for (byte i = 0; i < CYCLES; i++) displayMemoryPacket(i);
+  for (int i = 0; i < CYCLES; i++) displayMemoryPacket(i);
 }
 
 void updateCurrent()
@@ -848,7 +871,7 @@ void updateCurrent()
 
   load((char*)&c49); Serial1.println(buffer); //Scanning flash memory
 
-  for (byte i = 0; i < CYCLES; i++)
+  for (int i = 0; i < CYCLES; i++)
   {
     dt = displayMemoryPacket(i);
     if (dt == 4294967295)
