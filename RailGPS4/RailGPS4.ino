@@ -42,7 +42,7 @@
 #define MSHIFT 0                                           //Flash memory shift in bytes
 
 #ifndef MODULO
-#define MODULO 3                                           //Number of measures followed by data sending
+#define MODULO 6                                           //Number of measures followed by data sending
 #endif
 
 #ifndef SLEEPSAT
@@ -156,11 +156,18 @@ const char c54[]    PROGMEM = "AT+CLBSCFG=1,3,\"lbs-simcom.com:3002\"";
 const char c55[]    PROGMEM = "AT+CLBSCFG=0,3";
 const char c56[]    PROGMEM = "AT+CIPGSMLOC=2,1";
 const char c57[]    PROGMEM = "Timestamp: ";
+const char c58[]    PROGMEM = "+CBC: 0,XX,";
+const char c59[]    PROGMEM = "c4a.com";
+const char c60[]    PROGMEM = "GSMLOC: 0,XXXX/XX/XX,XX:XX:";
+const char c61[]    PROGMEM = "+CLBS: 0,XX.XXXXXX,XX.XXXXXX,";
+const char c62[]    PROGMEM = "+CBC: 0,X,";
+const char c63[]    PROGMEM = "+CBC: 0,XXX,";
 
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
 const unsigned long wait = INTERVAL;
 char memory[13];
 char buffer[64];
+char extra[32];
 char temp[10];
 unsigned int voltage;
 bool fail = false;
@@ -476,7 +483,7 @@ void gprs() {
 
   load((char*)&c0); communicate(); //AT
   load((char*)&c53); communicate(); //AT-ver
-  load((char*)&c1); loadAtPosition(SIMBAUD, 7); communicate(); //AT+IPR=4800
+  //load((char*)&c1); loadAtPosition(SIMBAUD, 7); communicate(); //AT+IPR=4800
 
   for (byte i = 0; i < 7; i++)
   {
@@ -668,17 +675,29 @@ void transmitPacket(int i)
 
 void Voltage()
 {
+  voltage = 0;
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "+CBC: 0,XX,"))
-    {
-      voltage = convert(i + 11, 4);
+    strcpy_P(extra, c58);
+    if (search(i)) voltage = convert(i + 11, 4);
 
-      Serial1.println();
+    if (!voltage) {
+      strcpy_P(extra, c62);
+      if (search(i)) voltage = convert(i + 10, 4);
+    }
+
+    if (!voltage) {
+      strcpy_P(extra, c63);
+      if (search(i)) voltage = convert(i + 12, 4);
+    }
+
+    if (voltage)
+    {
+      /*Serial1.println();
       load((char*)&c15); Serial1.print(buffer); //Voltage:
       Serial1.print(voltage);
-      Serial1.println();
+      Serial1.println();*/
 
       analyzed = true;
       break;
@@ -690,7 +709,8 @@ void BTSServer()
 {
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "c4a.com"))
+    strcpy_P(extra, c59);
+    if (search(i))
     {
       load((char*)&c54); communicate(); //AT+CLBSCFG=1,3,"lbs-simcom.com:3002"
     }
@@ -702,7 +722,8 @@ void BTSDateTime()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "GSMLOC: 0,XXXX/XX/XX,XX:XX:"))
+    strcpy_P(extra, c60);
+    if (search(i))
     {
       pvt.year   = convert(i + 10, 4);
       pvt.month  = convert(i + 15, 2);
@@ -712,23 +733,20 @@ void BTSDateTime()
       pvt.second = convert(i + 27, 2);
       pvt.numSV  = BTSSAT;
 
-      if (!SLEEPSAT)
-      {
-        Serial1.println();
-        load((char*)&c57); Serial1.print(buffer); //Timestamp:
-        Serial1.print(pvt.day);
-        Serial1.print(".");
-        Serial1.print(pvt.month);
-        Serial1.print(".");
-        Serial1.print(pvt.year);
-        Serial1.print(" ");      
-        Serial1.print(pvt.hour);
-        Serial1.print(":");      
-        Serial1.print(pvt.minute);
-        Serial1.print(":");
-        Serial1.print(pvt.second);
-        Serial1.println();
-      }
+      /*Serial1.println();
+      load((char*)&c57); Serial1.print(buffer); //Timestamp:
+      Serial1.print(pvt.day);
+      Serial1.print(".");
+      Serial1.print(pvt.month);
+      Serial1.print(".");
+      Serial1.print(pvt.year);
+      Serial1.print(" ");      
+      Serial1.print(pvt.hour);
+      Serial1.print(":");      
+      Serial1.print(pvt.minute);
+      Serial1.print(":");
+      Serial1.print(pvt.second);
+      Serial1.println();*/
 
       analyzed = true;
       break;
@@ -741,7 +759,8 @@ void BTSLocation()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    if (search(i, "+CLBS: 0,XX.XXXXXX,XX.XXXXXX,"))
+    load((char*)&c61);
+    if (search(i))
     {
       Serial1.println();
       updateFlashMemory(convert(i + 9, 9) * 10, convert(i + 19, 9) * 10);
@@ -753,11 +772,11 @@ void BTSLocation()
   }
 }
 
-bool search(byte from, char what[])
+bool search(byte from)
 {
-  for (byte i = 0; i < strlen(what); i++)
+  for (byte i = 0; i < strlen(extra); i++)
   {
-    if (what[i] != 'X' && buffer[from + i] != what[i]) return false;
+    if (extra[i] != 'X' && buffer[from + i] != extra[i]) return false;
   }
   return true;
 }
