@@ -759,7 +759,7 @@ void BTSLocation()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    load((char*)&c61);
+    strcpy_P(extra, c61);
     if (search(i))
     {
       Serial1.println();
