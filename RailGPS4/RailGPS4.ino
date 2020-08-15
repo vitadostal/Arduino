@@ -11,29 +11,30 @@
 #define GPSBAUD 4800
 #define SIMBAUD 9600
 #define SERBAUD 9600
-#define BTNSEND 3
 #define SIMRESET 2
+#define BTNSEND 0
 #define BTNMEASURE 0
 #define GPSTX 4
 #define GPSRX 5
 #define FLASHSCL 6
 #define FLASHSDA 7
 #define BTSSAT 100
+#define RESET_DURATION 50
 
 #ifndef CYCLES
 #define CYCLES 256                                         //Measures stored in flash memory
 #endif
 
 #ifndef PRIMARY
-#define PRIMARY 33                                         //Number of measures sent (out of all CYCLES)
+#define PRIMARY 43                                         //Number of measures sent (out of all CYCLES)
 #endif
 
 #ifndef SECONDARY
-#define SECONDARY 60                                       //Another number of measures sent, however, only every STEP-th measure is sent 
+#define SECONDARY 50                                       //Another number of measures sent, however, only every STEP-th measure is sent 
 #endif
 
 #ifndef STEP
-#define STEP 3                                             //Step used by SECONDARY
+#define STEP 4                                             //Step used by SECONDARY
 #endif
 
 #define PACKET 13                                          //Size of one measure in bytes
@@ -42,7 +43,7 @@
 #define MSHIFT 0                                           //Flash memory shift in bytes
 
 #ifndef MODULO
-#define MODULO 6                                           //Number of measures followed by data sending
+#define MODULO 4                                           //Number of measures followed by data sending
 #endif
 
 #ifndef SLEEPSAT
@@ -550,7 +551,7 @@ void gprs() {
     load((char*)&c31); Serial1.println(buffer); //Modem reset
     pinMode(SIMRESET, OUTPUT);
     digitalWrite(SIMRESET, LOW);
-    delay(50);
+    delay(RESET_DURATION);
     pinMode(SIMRESET, INPUT_PULLUP);
   }
 }
@@ -679,16 +680,16 @@ void Voltage()
   analyzed = false;
   for (byte i = 0; i <= 30; i++)
   {
-    strcpy_P(extra, c58);
+    strcpy_P(extra, c58); //"+CBC: 0,XX,"
     if (search(i)) voltage = convert(i + 11, 4);
 
     if (!voltage) {
-      strcpy_P(extra, c62);
+      strcpy_P(extra, c62); //"+CBC: 0,X,"
       if (search(i)) voltage = convert(i + 10, 4);
     }
 
     if (!voltage) {
-      strcpy_P(extra, c63);
+      strcpy_P(extra, c63); //"+CBC: 0,XXX,"
       if (search(i)) voltage = convert(i + 12, 4);
     }
 
