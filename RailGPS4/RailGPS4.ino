@@ -530,9 +530,9 @@ void gprs() {
   load((char*)&c0); communicate(); //AT
   load((char*)&c0); communicate(); //AT
   load((char*)&c8); communicate(); //AT+CIPQSEND=1
-  //157 is a magic constant that covers all http protocol headers etc.
-  sprintf(buffer, "AT+CIPSEND=%d", PACKETS + 157 + strlen(SERVER) + strlen(SERVERPATH) + strlen(SENSOR) + strlen(APIKEY));
-  communicate(); //AT+CIPSEND=size  
+  //158 is a magical constant that covers all http protocol headers etc.
+  sprintf(buffer, "AT+CIPSEND=%d", PACKETS + 158 + strlen(SERVER) + strlen(SERVERPATH) + strlen(SENSOR) + strlen(APIKEY));
+  communicate(); //AT+CIPSEND=size
   if (!fail) {
     delay(2000);
     trasmit();
@@ -639,7 +639,7 @@ void trasmit()
   load((char*)&c21); Serial.print(buffer); //Content-Type: application/x-www-form-urlencoded
   load((char*)&c17); Serial.print(buffer);
   load((char*)&c22); Serial.print(buffer); //Content-Length:
-  Serial.print(PACKETS + strlen(APIKEY) + strlen(SENSOR) + 4 + 1 + 4); // Content + Key + Sensor + Voltage + Flags + Delimiters
+  Serial.print(PACKETS + strlen(APIKEY) + strlen(SENSOR) + 4 + 2 + 4); // Content + Key + Sensor + Voltage + Flags + Delimiters
   load((char*)&c17); Serial.print(buffer);
   load((char*)&c17); Serial.print(buffer);
 
