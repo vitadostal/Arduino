@@ -50,6 +50,9 @@ unsigned char data6[] = {
 unsigned char data7[] = {
   0xB5, 0x62, 0x06, 0x11, 0x02, 0x00, 0x48, 0x01, 0x62, 0x12                                        //Receiver mgmt pwr save
 };
+unsigned char data8[] = {
+  0xB5, 0x62, 0x06, 0x11, 0x02, 0x00, 0x48, 0x00, 0x61, 0x11                                        //Receiver mgmt continous
+};
 
 void baud4800() {
   for (int i = 0; i < sizeof(data1); i++) {
@@ -110,9 +113,18 @@ void sleep()
 }
 
 void powersaving() {
-  for (int i = 0; i < sizeof(data5); i++) {
+  for (int i = 0; i < sizeof(data7); i++) {
     serial.write(data7[i]);
     ublox.write(data7[i]);
+    delay(5);
+  }
+  serial.println();
+}
+
+void continuous() {
+  for (int i = 0; i < sizeof(data8); i++) {
+    serial.write(data8[i]);
+    ublox.write(data8[i]);
     delay(5);
   }
   serial.println();
@@ -139,11 +151,11 @@ void loop() {
 
   if (digitalRead(button1) == LOW)
   {
-    ublox.begin(gpsbaudh);
-    baud4800();
+    ublox.begin(gpsbaudl);
+    baud9600();
     ublox.end();
 
-    ublox.begin(gpsbaudl);
+    ublox.begin(gpsbaudh);
     save();
     sleep();
     ublox.end();
@@ -153,10 +165,10 @@ void loop() {
 
   if (digitalRead(button2) == LOW)
   {
-    ublox.begin(gpsbaudl);
+    ublox.begin(gpsbaudh);
     messages();
-    galileo();
-    powersaving();
+    //galileo();
+    continuous();
     save();
     sleep();
     ublox.end();
