@@ -7,7 +7,9 @@
 
 #define DEVBAUD 9600
 #define SERBAUD 38400
-#define FW "FIWMARE >>>>>>>>>> 2020-09-25"
+#define FW "FIRMWARE 2020-28-10"
+#define MINDATETIME 777550000
+#define MAXDATETIME 4294967295
 
 #define BTNSEND    0
 #define BTNMEASURE 0
@@ -176,6 +178,10 @@ const char c64[]    PROGMEM = "+CIPSEND: ";
 const char c65[]    PROGMEM = "Transmitted: ";
 const char c66[]    PROGMEM = "AT+CIPACK=?";
 const char c67[]    PROGMEM = "^";
+const char c68[]    PROGMEM = " ignored";
+const char c69[]    PROGMEM = ":";
+const char c70[]    PROGMEM = ".";
+const char c71[]    PROGMEM = " date: ";
 
 char sensor[] = SENSOR;
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
@@ -939,8 +945,12 @@ void readMemoryPacket(int where)
   Wire.endTransmission();
 
   Wire.requestFrom(address, PACKET);
+  delay(5);
 
   for (byte i = 0; i < PACKET; i++) {
+    if (!Wire.available()) {
+      delay(10);
+    }
     memory[i] = Wire.read();
   }
 }
@@ -958,43 +968,88 @@ unsigned long displayMemoryPacket(int where)
   memcpy(&lon, &memory[5], 4);
   memcpy(&lat, &memory[9], 4);
 
+  unsigned long day = dt / 100000;
+  unsigned long sec = dt - day * 100000;
+
+  unsigned long year = day / 372;
+  day = day - year * 372;
+  unsigned long month = day / 31;
+  day = day - month * 31;
+
+  unsigned long hour = sec / 3600;
+  sec = sec - hour * 3600;
+  unsigned long min = sec / 60;
+  sec = sec - min * 60;
+
+  year += 2000;
+
   load((char*)&c26); console.print(buffer); //Cycle:
   console.print(where);
   load((char*)&c27); console.print(buffer); //lat:
   console.print(lat);
   load((char*)&c28); console.print(buffer); //lng:
   console.print(lon);
+  load((char*)&c71); console.print(buffer); //date:
+  load((char*)&c70);
+  if (day < 10) printZero();
+  console.print(day);
+  console.print(buffer);
+  if (month < 10) printZero();
+  console.print(month);
+  console.print(buffer);
+  console.print(year);
   load((char*)&c52); console.print(buffer); //time:
-  console.print(dt);
+  load((char*)&c69);
+  if (hour < 10) printZero();
+  console.print(hour);
+  console.print(buffer);
+  if (min < 10) printZero();
+  console.print(min);
+  console.print(buffer);
+  if (sec < 10) printZero();
+  console.print(sec);
   load((char*)&c29); console.print(buffer); //sat:
-  console.println(sat);
+  if (sat < 10) printSpace();
+  console.print(sat);
 
+  if (dt < MINDATETIME) {
+    dt = MAXDATETIME - 1;
+    load((char*)&c68); console.print(buffer); //ignored
+  }
+
+  console.println();
   return dt;
 }
 
-void displayAllMemoryPackets()
-{
+void printZero() {
+  console.print("0");
+}
+
+void printSpace() {
+  console.print(" ");
+}
+
+void displayAllMemoryPackets() {
   for (int i = 0; i < CYCLES; i++) displayMemoryPacket(i);
 }
 
-void updateCurrent()
-{
+void updateCurrent() {
   unsigned long dt;
-  unsigned long old = 0;
+  unsigned long old = MAXDATETIME;
 
   load((char*)&c49); console.println(buffer); //Scanning flash memory
 
   for (int i = 0; i < CYCLES; i++)
   {
     dt = displayMemoryPacket(i);
-    if (dt == 4294967295)
+    if (dt == MAXDATETIME)
     {
       current = i;
       break;
     }
-    if (dt > old)
+    if (dt < old)
     {
-      current = i + 1;
+      current = i;
       old = dt;
     }
   }
