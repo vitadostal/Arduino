@@ -5,10 +5,10 @@
 #include <SoftwareSerial.h>
 #include <Wire.h>
 
-#define DEVBAUD 9600
+#define DEVBAUD  9600
 #define SERBAUD 38400
-#define FW "FIRMWARE 2020-28-10"
-#define MINDATETIME 777550000
+#define FW "FIRMWARE 2021-01-01/B"
+#define MINDATETIME  777550000
 #define MAXDATETIME 4294967295
 
 #define BTNSEND    0
@@ -89,7 +89,7 @@
 #endif
 
 #ifndef SERVERPATH
-#define SERVERPATH "/script/measure_add_gps2.php"          //Processing script path
+#define SERVERPATH "/script/measure_add_gps.php"           //Processing script path
 #endif
 
 #ifndef APIKEY
@@ -182,6 +182,7 @@ const char c68[]    PROGMEM = " ignored";
 const char c69[]    PROGMEM = ":";
 const char c70[]    PROGMEM = ".";
 const char c71[]    PROGMEM = " date: ";
+const char c72[]    PROGMEM = "Last successful sent: ";
 
 char sensor[] = SENSOR;
 const unsigned char UBX_HEADER[] = { 0xB5, 0x62 };
@@ -195,6 +196,8 @@ unsigned int transmitted;
 bool fail = false;
 bool modify = false;
 bool success = false;
+bool successSent = false;
+bool successClose = false;
 bool signal = false;
 bool btnMeasureLast = false;
 bool btnSendLast = false;
@@ -481,8 +484,8 @@ void updateFlashMemory(long lon, long lat)
   dt_time += pvt.second;
   unsigned long dt_date = pvt.year - 2000;
   dt_date *= 372;
-  dt_date += pvt.month * 31;
-  dt_date += pvt.day;
+  dt_date += (pvt.month - 1) * 31;
+  dt_date += (pvt.day - 1);
   unsigned long dt = dt_date * 100000 + dt_time;
 
   if (current < 0 || current >= CYCLES) current = 0;
@@ -493,6 +496,7 @@ void updateFlashMemory(long lon, long lat)
   memcpy(&memory[9], &lat, 4);
 
   writeMemoryPacket(current);
+  //displayMemoryPacket(current);
 
   load((char*)&c26); console.print(buffer); //Cycle:
   console.print(current);
@@ -531,69 +535,83 @@ void gprs() {
   load((char*)&c0);  Serial.println(buffer); delay(500);
 
   load((char*)&c0); communicate(); //AT
+  load((char*)&c0); communicate(); //AT
   load((char*)&c53); communicate(); //AT-ver
-  //load((char*)&c1); loadAtPosition(SIMBAUD, 7); communicate(); //AT+IPR=4800
+  if (!success) fail = true;
 
-  for (byte i = 0; i < 7; i++)
-  {
-    load((char*)&c2); analyze = 4; communicate(); //AT+CBC
-    if (analyzed) break;
-  }
-
-  if (!signal && BTSCHECK)
-  {
-    load((char*)&c42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
-    load((char*)&c43); communicate(); //AT+SAPBR=3,1,"APN","internet"
-    load((char*)&c44); communicate(); //AT+SAPBR=1,1
-    load((char*)&c45); communicate(); //AT+SAPBR=2,1
-    load((char*)&c55); analyze = 1; communicate(); //AT+CLBSCFG=0,3
-
+  if (!fail) {
     for (byte i = 0; i < 7; i++)
     {
-      load((char*)&c56); communicate(); //AT+CIPGSMLOC=2,1
-      load((char*)&c0); analyze = 2; communicate(); //AT
+      load((char*)&c2); analyze = 4; communicate(); //AT+CBC
       if (analyzed) break;
     }
 
-    if (analyzed) for (byte i = 0; i < 7; i++)
+    if (!signal && BTSCHECK)
+    {
+      load((char*)&c42); communicate(); //AT+SAPBR=3,1,"Contype","GPRS"
+      load((char*)&c43); communicate(); //AT+SAPBR=3,1,"APN","internet"
+      load((char*)&c44); communicate(); //AT+SAPBR=1,1
+      load((char*)&c45); communicate(); //AT+SAPBR=2,1
+      load((char*)&c55); analyze = 1; communicate(); //AT+CLBSCFG=0,3
+
+      for (byte i = 0; i < 7; i++)
       {
-        load((char*)&c46); limit = 30000; communicate(); //AT+CLBS=4,1
-        load((char*)&c0); analyze = 3; limit = 30000; communicate(); //AT
+        load((char*)&c56); communicate(); //AT+CIPGSMLOC=2,1
+        load((char*)&c0); analyze = 2; communicate(); //AT
         if (analyzed) break;
       }
 
-    load((char*)&c47); communicate(); //AT+SAPBR=0,1
+      if (analyzed) for (byte i = 0; i < 7; i++)
+        {
+          load((char*)&c46); limit = 30000; communicate(); //AT+CLBS=4,1
+          load((char*)&c0); analyze = 3; limit = 30000; communicate(); //AT
+          if (analyzed) break;
+        }
+
+      load((char*)&c47); communicate(); //AT+SAPBR=0,1
+    }
+
+    signal = false;
+    load((char*)&c3); communicate(); //AT+CSTT="internet","",""
+    load((char*)&c4); communicate(); //AT+CIICR
+    load((char*)&c5); communicate(); //AT+CIPSTATUS
+    load((char*)&c6); communicate(); //AT+CIFSR
+    modify = true;
+    load((char*)&c12); communicate(); //AT+CIPSTART="TCP","",80
+    modify = false;
+    if (!fail) delay (3000);
+    load((char*)&c0); communicate(); //AT
+    load((char*)&c0); communicate(); //AT
+    load((char*)&c0); communicate(); //AT
+    if (!success) fail = true;
   }
 
-  signal = false;
-  load((char*)&c3); communicate(); //AT+CSTT="internet","",""
-  load((char*)&c4); communicate(); //AT+CIICR
-  load((char*)&c5); communicate(); //AT+CIPSTATUS
-  load((char*)&c6); communicate(); //AT+CIFSR
-  modify = true;
-  load((char*)&c12); communicate(); //AT+CIPSTART="TCP","",80
-  modify = false;
-  if (!fail) delay (3000);
-  load((char*)&c0); communicate(); //AT
-  load((char*)&c0); communicate(); //AT
-  load((char*)&c0); communicate(); //AT
-  load((char*)&c8); communicate(); //AT+CIPQSEND=1
-  calculatePackets();
-  //158 is a magical constant that covers all http protocol headers etc.
-  sprintf(buffer, "AT+CIPSEND=%d", packets * PACKET + 158 + strlen(SERVER) + strlen(SERVERPATH) + strlen(sensor) + strlen(APIKEY));
-  communicate(); //AT+CIPSEND=size
+  if (!fail) {
+    load((char*)&c8); communicate(); //AT+CIPQSEND=1
+    calculatePackets();
+    sprintf(buffer, "AT+CIPSEND=%d", packets * PACKET + 158 + strlen(SERVER) + strlen(SERVERPATH) + strlen(sensor) + strlen(APIKEY));
+    communicate(); //AT+CIPSEND=size
+  }
+
   if (!fail) {
     delay(2000);
     trasmit();
     delay(2000);
   }
+
   load((char*)&c32); analyze = 5; communicate(); //AT+CIPSEND?
   load((char*)&c66); communicate(); //AT+CIPACK=?
-  if (success) last = two;
+  successSent = success;
   load((char*)&c33); communicate(); //AT+CIPCLOSE
+  successClose = success;
+  if (successSent && successClose) {
+    last = two;
+    load((char*)&c72); console.print(buffer); //Last successful sent:
+    console.println(last);
+    console.println();
+  }
   load((char*)&c10); communicate(); //AT+CIPSHUT
   load((char*)&c11); communicate(); //AT+CSCLK=2
-  //load((char*)&c37); communicate(); //AT+CPOWD=1
   if (!success) fail = true;
 
   if (fail)
@@ -672,7 +690,7 @@ void receiveCommand()
     if (analyze == 2) BTSDateTime();
     if (analyze == 3) BTSLocation();
     if (analyze == 4) Voltage();
-    if (analyze == 5) TransmissionStatus();
+    //if (analyze == 5) TransmissionStatus();
   }
 
   analyze = 0;
@@ -945,7 +963,6 @@ void readMemoryPacket(int where)
   Wire.endTransmission();
 
   Wire.requestFrom(address, PACKET);
-  delay(5);
 
   for (byte i = 0; i < PACKET; i++) {
     if (!Wire.available()) {
@@ -982,6 +999,8 @@ unsigned long displayMemoryPacket(int where)
   sec = sec - min * 60;
 
   year += 2000;
+  month++;
+  day++;
 
   load((char*)&c26); console.print(buffer); //Cycle:
   console.print(where);
