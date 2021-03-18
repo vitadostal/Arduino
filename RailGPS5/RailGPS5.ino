@@ -7,7 +7,7 @@
 
 #define DEVBAUD  9600
 #define SERBAUD 38400
-#define FW "FIRMWARE 2021-01-01/B"
+#define FW "FIRMWARE 2021-03-18/C"
 #define MINDATETIME  777550000
 #define MAXDATETIME 4294967295
 
@@ -1101,6 +1101,6 @@ byte identify() {
 void loadSensor() {
   if (SENSOR == "") {
     byte id = identify();
-    if (id > 9) sprintf(sensor, "RTD%d", id); else sprintf(sensor, "RTD0%d", id);
+    if (id > 9) sprintf(sensor, "RTC%d", id); else sprintf(sensor, "RTC0%d", id);
   }
 }
