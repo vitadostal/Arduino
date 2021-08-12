@@ -4,10 +4,11 @@
 
 #include <SoftwareSerial.h>
 #include <Wire.h>
+#include <avr/wdt.h>
 
 #define DEVBAUD  9600
 #define SERBAUD 38400
-#define FW "FIRMWARE 2021-03-18/C"
+#define FW "FIRMWARE 2021-08-12/D"
 #define MINDATETIME  777550000
 #define MAXDATETIME 4294967295
 
@@ -61,11 +62,11 @@
 #endif
 
 #ifndef BEFORE
-#define BEFORE 12                                          //Wake Ublox before measure [s]
+#define BEFORE 14                                          //Wake Ublox before measure [s]
 #endif
 
 #ifndef INTERVAL
-#define INTERVAL 61                                        //Interval between measures [s]
+#define INTERVAL 60                                        //Interval between measures [s]
 #endif
 
 #ifndef GPSMODULE
@@ -284,6 +285,7 @@ bool processGPS() {
 
   while ( Serial.available() ) {
     byte c = Serial.read();
+    wdt_reset();    
     if ( fpos < 2 ) {
       if ( c == UBX_HEADER[fpos] )
         fpos++;
@@ -326,8 +328,9 @@ static void readUblox(int ms)
   {
     if (processGPS()) return;
     delay(5);
+    wdt_reset();
   }
-  while (millis() < start + ms);
+  while (millis() - start < ms);
 }
 
 void sleepUblox()
@@ -344,6 +347,7 @@ void sleepUblox()
   {
     Serial.write(data[i]);
     delay(5);
+    wdt_reset();    
   }
 
   load((char*)&c24); console.print(buffer); //Ublox sleep:
@@ -354,11 +358,12 @@ void sweetDreams(unsigned long int period)
 {
   load((char*)&c25); console.print(buffer); //Attiny sleep:
   console.println(period);
-  delay(period * 1000);
+  myDelay(period * 1000);
 }
 
 void setup()
 {
+  wdt_enable(WDTO_2S);
   memset(&memory, 255, PACKET);
   delim[0] = 0x1a;
   delim[1] = 0x00;
@@ -381,7 +386,8 @@ void setup()
   console.stopListening();
   console.println();
   console.println(FW);
-  delay(1000);
+  wdt_reset();
+  myDelay(1000);
   Serial.begin(DEVBAUD);
   updateCurrent();
   measure();
@@ -390,6 +396,7 @@ void setup()
 void loop()
 {
   delay(100);
+  wdt_reset();
 
   //Early measure
   if (BTNMEASURE) {
@@ -398,7 +405,7 @@ void loop()
         btnMeasureLast = true;
         load((char*)&c39); console.println(buffer); //Measure button pressed
         Serial.write(0xFF);
-        delay(10000);
+        myDelay(10000);
         measure();
       }
     } else {
@@ -521,6 +528,7 @@ void updateFlashMemory(long lon, long lat)
 }
 
 void load(char* which) {
+  wdt_reset();
   strcpy_P(buffer, which);
 }
 
@@ -532,7 +540,7 @@ void loadAtPosition(const char* what, byte position) {
 
 void gprs() {
   console.println();
-  load((char*)&c0);  Serial.println(buffer); delay(500);
+  load((char*)&c0);  Serial.println(buffer); myDelay(500);
 
   load((char*)&c0); communicate(); //AT
   load((char*)&c0); communicate(); //AT
@@ -579,7 +587,7 @@ void gprs() {
     modify = true;
     load((char*)&c12); communicate(); //AT+CIPSTART="TCP","",80
     modify = false;
-    if (!fail) delay (3000);
+    if (!fail) myDelay (3000);
     load((char*)&c0); communicate(); //AT
     load((char*)&c0); communicate(); //AT
     load((char*)&c0); communicate(); //AT
@@ -594,9 +602,9 @@ void gprs() {
   }
 
   if (!fail) {
-    delay(2000);
+    myDelay(2000);
     trasmit();
-    delay(2000);
+    myDelay(2000);
   }
 
   load((char*)&c32); analyze = 5; communicate(); //AT+CIPSEND?
@@ -663,16 +671,18 @@ void receiveCommand()
   byte j = 0;
   buffer[0] = '#';
 
-  while (!Serial.available() && millis() < stamp + limit);
+  while (!Serial.available() && millis() - stamp < limit) {wdt_reset();};
   if (millis() >= stamp + limit)
   {
     fail = true;
+    wdt_reset();    
   }
   else
   {
     for (j = 0; j < 20; j++) {
       while (Serial.available()) {
         thischar = Serial.read();
+        wdt_reset();
 
         buffer[i] = thischar;
         if (buffer[i - 1] == 'O' && buffer[i] == 'K') success = true;
@@ -681,6 +691,7 @@ void receiveCommand()
         if (i > 62) i = 1;
       }
       delay(10);
+      wdt_reset();
     }
 
     buffer[i] = delim[1];
@@ -756,6 +767,7 @@ void transmitCommands(bool simulation) {
 
 int transmitPacket(int i, int base, bool testrun, bool simulation)
 {
+  wdt_reset();
   int which = (i + base) % CYCLES;
   if (testrun && (which == CYCLES - 1)) firstrun = false;
   if (!simulation) {
@@ -953,6 +965,7 @@ void writeMemoryPacket(int where)
 
   Wire.endTransmission();
   delay(10);
+  wdt_reset();  
 }
 
 void readMemoryPacket(int where)
@@ -967,6 +980,7 @@ void readMemoryPacket(int where)
   for (byte i = 0; i < PACKET; i++) {
     if (!Wire.available()) {
       delay(10);
+      wdt_reset();      
     }
     memory[i] = Wire.read();
   }
@@ -1060,6 +1074,8 @@ void updateCurrent() {
 
   for (int i = 0; i < CYCLES; i++)
   {
+    wdt_reset();
+    
     dt = displayMemoryPacket(i);
     if (dt == MAXDATETIME)
     {
@@ -1103,4 +1119,15 @@ void loadSensor() {
     byte id = identify();
     if (id > 9) sprintf(sensor, "RTC%d", id); else sprintf(sensor, "RTC0%d", id);
   }
+}
+
+static void myDelay(int ms)
+{
+  unsigned long start = millis();
+  do
+  {
+    delay(5);
+    wdt_reset();
+  }
+  while (millis() - start < ms);
 }
