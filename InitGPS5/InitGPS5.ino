@@ -167,7 +167,7 @@ void loop() {
   {
     ublox.begin(gpsbaudh);
     messages();
-    //galileo();
+    galileo();
     continuous();
     save();
     sleep();
