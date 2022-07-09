@@ -50,7 +50,7 @@
       else
       {
         $inlineCount = 0;
-        if ($count >= 21) break;
+        if ($count >= 25) break;
         if ($lastSensor != null) print '</tr>';
         $lastTimestamp = $measure->timestamp;
         $lastSensor = $measure->sensor;
@@ -73,7 +73,7 @@
     }
     print '</tr></table>';
 
-    print '<p>Tabulka se automaticky aktualizuje každých 5 sekund. Je zobrazeno 21 nejnovějších záznamů.</p>';    
+    print '<p>Tabulka se automaticky aktualizuje každých 5 sekund. Je zobrazeno 25 nejnovějších záznamů.</p>';    
     print '<button class="ui-button ui-widget ui-corner-all" onclick="window.location.href=\'?date='.Params::$date_czech.'\'" >Zobrazit všechny senzory</button>';
   }
   else

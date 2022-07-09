@@ -4,15 +4,18 @@ class Database
 {
   public $conn;
   
-  private $servername = "localhost";	
+  private $servername;	
   private $dbname;
   private $username;
   private $password;
   
-  public function connect()
+  function __construct()
   {
     $this->loadCredentials();
-    
+  }
+
+  public function connect()
+  {
   	$this->conn = new mysqli($this->servername, $this->username, $this->password, $this->dbname);
   	if ($this->conn->connect_error)
     {
@@ -24,8 +27,6 @@ class Database
 
   public function connectDatabase($db)
   {
-    $this->loadCredentials();
-    
   	$this->conn = new mysqli($this->servername, $db, $this->password, $db);
   	if ($this->conn->connect_error)
     {
@@ -33,6 +34,32 @@ class Database
   	}
     
     $this->conn->set_charset("utf8");
+  }
+
+  public function connectRailTourSensorDatabase($year)
+  {
+    if ($year >= 2022) {
+      $this->connect();
+    } else {
+      $this->connectDatabase("arduino_railtour_". Params::$year);
+    }
+  }
+
+  public function connectRailTourMainDatabase($race)
+  {
+    $this->setHost(DB_HOST_CZ);
+    $this->setPassword(constant("DB_PASSWD_$race"));
+    $this->connectDatabase(DB_LOGIN_CZ);
+  }
+
+  public function setHost($host)
+  {
+    $this->servername = $host;
+  }
+
+  public function setPassword($passwd)
+  {
+    $this->password = $passwd;
   }
 
 	public function getById($table, $idName, $idValue)
@@ -60,7 +87,23 @@ class Database
 		$result = $this->conn->query($q);		
 		return $result->fetch_all(MYSQLI_ASSOC);
 	}
-  
+
+  public function getByThreeIds($table, $idName, $idValue, $idName2, $idValue2, $idName3, $idValue3)
+	{
+		$table    = mysqli_real_escape_string($this->conn, $table);
+		$idName   = mysqli_real_escape_string($this->conn, $idName);
+		$idValue  = mysqli_real_escape_string($this->conn, $idValue);
+		$idName2  = mysqli_real_escape_string($this->conn, $idName2);
+		$idValue2 = mysqli_real_escape_string($this->conn, $idValue2);
+		$idName3  = mysqli_real_escape_string($this->conn, $idName3);
+		$idValue3 = mysqli_real_escape_string($this->conn, $idValue3);
+
+		$q = "SELECT * FROM $table WHERE $idName='$idValue' AND $idName2='$idValue2' AND $idName3='$idValue3'";
+
+		$result = $this->conn->query($q);		
+		return $result->fetch_all(MYSQLI_ASSOC);
+	}
+
 	public function getByCondition($table, $columns, $where = false, $order = false, $limit = false)
 	{
     $table   = mysqli_real_escape_string($this->conn, $table);
@@ -70,7 +113,7 @@ class Database
     if ($order !== false) $q .= "ORDER BY $order ";
     if ($limit !== false) $q .= "LIMIT 0,$limit ";
     
-		$result = $this->conn->query($q);        
+    $result = $this->conn->query($q);        
 		return $result->fetch_all(MYSQLI_ASSOC);
 	}
   
@@ -109,6 +152,7 @@ class Database
 
   private function loadCredentials()
   {
+    $this->servername = Config::$dbhost;
     $this->dbname = Config::$dbname;
     $this->username = Config::$dbuser;
     $this->password = Config::$dbpasswd;

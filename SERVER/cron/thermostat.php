@@ -67,14 +67,21 @@
   {
     if ($now >= $program->from_time)
     {
+      /*print($on."\n");
+      print($temperature."\n");
+      print($program->min."\n");
+      print($program->max."\n");*/
+      
       //Time to stop heating
       if ($on && $temperature >= $program->max)
       {
+        //print("SWITCH OFF\n");
         file_put_contents($filename, "<OFF>");
       }
       //Time to start heating
       elseif (!$on && $temperature < $program->min)
       {
+        //print("SWITCH ON\n");
         file_put_contents($filename, "<ON>");
       }
       return;

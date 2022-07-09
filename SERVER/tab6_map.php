@@ -58,12 +58,12 @@
         print ' new google.maps.Point(10, 34));';              
       }
       
-      $measureSet = Measure::loadClassNewsLastMinutes($database, Config::$gpsclass, Params::$sensors, 60*24); //60*24 = 1 day
-      foreach($measureSet as $measure)
+      $measureSet = Measure::loadClassNewsLastMinutes($database, Config::$gpsclass, Params::$sensors, 10 * 60*24); //60*24 = 1 day
+      foreach($measureSet as $id => $measure)
       {                             
-        print 'var point'. $measure->id. ' = {lat: '. $measure->value1. ', lng: '. $measure->value2. '};';
+        print 'var point'. $id. ' = {lat: '. $measure->value1. ', lng: '. $measure->value2. '};';
         print 'var marker = new google.maps.Marker({';
-        print '  position: point'. $measure->id. ',';
+        print '  position: point'. $id. ',';
         print '  title: "'. $measure->date. ' | '. $sensorSet[$measure->sensor]->comment. ' | '. $measure->time. '",'; 
         print '  icon: pin'. $measure->sensor. ',';
         print '  map: map';

@@ -2,7 +2,6 @@
 
 class Measure 
 {		
-	public $id;
 	public $timestamp;
 	public $date;
 	public $time;
@@ -17,16 +16,25 @@ class Measure
 	public $text1;
 	public $text2;
 	public $text3;
-  private static $condition;
-  
+  private static $condition = '';
+
+  public static function setMinDate($db, $date)
+  {
+    self::$condition .= ' AND timestamp >= "'. mysqli_real_escape_string($db->conn, $date).'"';
+  }
+
+  public static function setMaxDate($db, $date)
+  {
+    self::$condition .= ' AND timestamp <= "'. mysqli_real_escape_string($db->conn, $date).'"';
+  }  
+
   public static function setMinSatellites($db, $sat)
   {
-    self::$condition = ' AND value3 > '. mysqli_real_escape_string($db->conn, $sat);
+    self::$condition .= ' AND value3 >= '. mysqli_real_escape_string($db->conn, $sat);
   }
 
 	public function fromDataRow(array $dataRow)
 	{
-    if (isset($dataRow['id']))        $this->id        = $dataRow['id'];
     if (isset($dataRow['timestamp'])) $this->timestamp = $dataRow['timestamp'];
     if (isset($dataRow['date']))      $this->date      = $dataRow['date'];
     if (isset($dataRow['time']))      $this->time      = $dataRow['time'];
@@ -46,7 +54,6 @@ class Measure
 	public function toDataRow()
 	{
     $dataRow = array();
-    $dataRow['id']        = $this->id;
     $dataRow['timestamp'] = $this->timestamp;
     $dataRow['date']      = $this->date;
     $dataRow['time']      = $this->time;
@@ -62,10 +69,10 @@ class Measure
     return $dataRow;
 	}
   
-  public static function load($db, $id)
+  public static function load($db, $timestamp, $sensor, $class)
   {	
     $object = new Measure();
-    $dataset = $db->getById("measure", "id", $id);
+    $dataset = $db->getByThreeIds("measure", "timestamp", $timestamp, "sensor", $sensor, "class", $class);
     
     if ($dataset != null)
       $object->fromDataRow($dataset[0]);
@@ -78,34 +85,34 @@ class Measure
 	{
     $dataset = $db->getByCondition(
       "measure",
-      "id, timestamp, DATE(timestamp) AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      "timestamp, DATE(timestamp) AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
       Database::whereArray("sensor", $sensors),
-      "timestamp DESC, sensor ASC, field ASC", $count);     
+      "timestamp DESC, sensor ASC, field ASC", $count);
 
 		$result = array();
 		foreach($dataset as $row)
 		{
 			$object = new Measure();
       $object->fromDataRow($row);
-      $result[$object->id] = $object;
+      $result[] = $object;
 		}
 		return $result;
 	}
   
-	public static function loadClassNews($db, $class, $sensor, $count)
+	public static function loadClassNews($db, $class, $sensors, $count)
 	{
     $dataset = $db->getByCondition(
       "measure",
-      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
-      "sensor='".$sensor."' AND class='".$class."'",
-      "timestamp DESC, sensor ASC, field ASC", $count);     
+      "timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      Database::whereArray("sensor", $sensors). " ". self::$condition,
+      "timestamp DESC, sensor ASC, field ASC", $count);
 
 		$result = array();
 		foreach($dataset as $row)
 		{
 			$object = new Measure();
       $object->fromDataRow($row);
-      $result[$object->id] = $object;
+      $result[] = $object;
 		}
 		return $result;
 	}
@@ -116,7 +123,7 @@ class Measure
     
     $dataset = $db->getByCondition(
       "measure",
-      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      "timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
       "class='$class' AND timestamp > DATE_SUB(NOW(), INTERVAL $minutes MINUTE) AND ". Database::whereArray("sensor", $sensors). " ". self::$condition,      
       "timestamp DESC, sensor ASC, field ASC");     
 
@@ -125,7 +132,7 @@ class Measure
 		{
 			$object = new Measure();
       $object->fromDataRow($row);
-      $result[$object->id] = $object;
+      $result[] = $object;
 		}
 		return $result;
 	}
@@ -137,7 +144,7 @@ class Measure
 
     $dataset = $db->getByCondition(
       "measure",
-      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      "timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
       "class='$class' AND timestamp >= '$from' AND timestamp <= '$to' AND ". Database::whereArray("sensor", $sensors). " ". self::$condition,      
       "timestamp DESC, sensor ASC, field ASC");     
 
@@ -146,7 +153,7 @@ class Measure
 		{
 			$object = new Measure();
       $object->fromDataRow($row);
-      $result[$object->id] = $object;
+      $result[] = $object;
 		}
 		return $result;
 	}
@@ -161,7 +168,7 @@ class Measure
     
     $dataset = $db->getUnionByCondition(
       "measure",
-      "id, timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
+      "timestamp, DATE_FORMAT(timestamp,'%d.%m.%Y') AS date, TIME(timestamp) AS time, sensor, class, field, value1, value2, value3, text1, text2, text3",
       $whereArray,      
       "timestamp DESC LIMIT 1");     
 
@@ -170,7 +177,7 @@ class Measure
 		{
 			$object = new Measure();
       $object->fromDataRow($row);
-      $result[$object->id] = $object;
+      $result[] = $object;
 		}
 		return $result;
 	}  
@@ -238,7 +245,7 @@ class Measure
   {
     $dataset = $db->getByCondition(
       "measure",
-      "id, timestamp, HOUR(timestamp) as hour, MINUTE(timestamp) as minute, DATE(timestamp) AS date, TIME(timestamp) AS time, sensor, class, value1, value2, value3, text1, text2, text3", 
+      "timestamp, HOUR(timestamp) as hour, MINUTE(timestamp) as minute, DATE(timestamp) AS date, TIME(timestamp) AS time, sensor, class, value1, value2, value3, text1, text2, text3", 
       "class='".$class."' AND DATE(timestamp)='$date' AND ". Database::whereArray("sensor", $sensors),
       "sensor, timestamp, field");           
 
@@ -247,7 +254,7 @@ class Measure
 		{
 			$object = new Measure();
       $object->fromDataRow($row);
-      $result[$object->id] = $object;
+      $result[] = $object;
 		}
 		return $result;
   }    
@@ -256,7 +263,7 @@ class Measure
   {
     $dataset = $db->getByCondition(
       "measure",
-      "id, timestamp, HOUR(timestamp) as hour, MINUTE(timestamp) as minute, DATE(timestamp) AS date, TIME(timestamp) AS time, sensor, class, value1, value2, value3, text1, text2, text3", 
+      "timestamp, HOUR(timestamp) as hour, MINUTE(timestamp) as minute, DATE(timestamp) AS date, TIME(timestamp) AS time, sensor, class, value1, value2, value3, text1, text2, text3", 
       "DATE(timestamp)='$date' AND ". Database::whereArray("sensor", $sensors),
       "sensor, timestamp, field");
 
@@ -265,7 +272,7 @@ class Measure
 		{
 			$object = new Measure();
       $object->fromDataRow($row);
-      $result[$object->id] = $object;
+      $result[] = $object;
 		}
 		return $result;
   }

@@ -134,7 +134,7 @@
         print '<ul>';
           foreach ($graphSet as $graph)
           {             
-            $chart = 'chart.php?'. Utils::sensorQuery(Params::$sensors). '&graph='. $graph->graph. '&date='. Params::$date_czech; 
+            $chart = 'chart.php?'. Utils::sensorQuery(Params::$sensors). '&amp;graph='. $graph->graph. '&amp;date='. Params::$date_czech; 
              
             print '<li><a href="#'. $graph->graph. '"
               onclick=\'$("div#svg-'. $graph->graph. '").load("'. $chart. '")\'

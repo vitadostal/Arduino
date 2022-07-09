@@ -55,7 +55,7 @@ class Sensor
 		return $result;	
 	}
   
-	public static function loadSelected($db, $sensors)
+	public static function loadSelected($db, $sensors, $key = true)
 	{	
 		$dataset = $db->getByCondition("sensor", "*", "comment != '' AND ". Database::whereArray("sensor", $sensors));
 		$result = array();
@@ -63,8 +63,11 @@ class Sensor
 		foreach($dataset as $row)
 		{
 			$object = new Sensor();
-      $object->fromDataRow($row);      
-      $result[$object->sensor] = $object;
+      		$object->fromDataRow($row);
+			if ($key)  
+				$result[$object->sensor] = $object;
+			else 
+				$result[] = $object;
 		}		
 		return $result;	
 	}

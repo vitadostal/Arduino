@@ -22,29 +22,28 @@
   if (isset ($voltage)) $voltage = mysqli_real_escape_string($database->conn, $voltage); else exit();
   
   //Sensor identification can be changed in configuration
-  $sensor = Sensor::remap($sensor);  
-
-  //Get last measure stored in the database
-  $lastdatetime = null;
-  //$measure = Measure::loadLastMeasure($database, $sensor, Config::$gpsclasssat);
-  //if ($measure != null) $lastdatetime = new DateTime($measure->timestamp);
+  $sensor = Sensor::remap($sensor);
   
   //Get minimal acceptable date
   $lastweek = new DateTime();
   $lastweek->modify('-1 week');
-  
+
   //Get maximal acceptable date
   $nextweek = new DateTime();
   $nextweek->modify('+15 minutes');
 
+  //Get three minutes ago
+  $minsago = new DateTime();
+  $minsago->modify('-3 minutes');  
+
   //Define allowed coordinates
-  $minlat = 47.7;
-  $maxlat = 51.1;
-  $minlng = 12;
-  $maxlng = 19;
+  $minlat = 40;
+  $maxlat = 60;
+  $minlng = -24;
+  $maxlng = 24;
 
   //Analyze sensor data
-  file_put_contents('/tmpx', date("D M j G:i:s T Y, "). strlen($packet). ", ". $voltage. " V\n", FILE_APPEND);
+  file_put_contents('/tmpx', date("D M j G:i:s T Y, "). strlen($packet). ", ". $sensor. ", ". $voltage. " V\n", FILE_APPEND);
   $cycles = floor(strlen($packet) / 13);
   $records = array(); 
   for($cycle = 0; $cycle < $cycles; $cycle++)
@@ -113,49 +112,36 @@
   //Sort records from the oldest to the newest
   ksort($records);
   foreach ($records as $record) $lastid = $record['id'];
-    
-  //Database transaction
-  //$sql = 'START TRANSACTION;';
+  $lastrecord = null;
   $sql = '';
- 
-  $real = 0;
+  
+  //Iterate records
   foreach ($records as $record)
-  {
-    $datetime = new DateTime($record['stamp']);
-
-    //Only newer measures are stored
-    if ($lastdatetime == null || $lastdatetime < $datetime)
+  {   
+    if ($record['sat'] != 0)
     {
-      $real++;
-      
-      if ($record['sat'] != 0)
-      {
-        $sql .= "INSERT IGNORE INTO measure (timestamp, sensor, class, field, value1, value2, value3)
-        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclass."', 1, '".$record['lat']."', '".$record['lng']."', '".$record['sat']."');";
-        
-        $sql .= "INSERT IGNORE INTO measure (timestamp, sensor, class, field, value1)
-        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasslong."', 2, '".$record['lng']."');";
-      }
+      $sql .= "INSERT IGNORE INTO measure (timestamp, sensor, class, field, value1, value2, value3)
+      VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclass."', 1, '".$record['lat']."', '".$record['lng']."', '".$record['sat']."');";
       
       $sql .= "INSERT IGNORE INTO measure (timestamp, sensor, class, field, value1)
-      VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasssat."', 3, '".$record['sat']."');";
-      
-      //Last record has voltage included
-      if ($lastid == $record['id'])
-      {
-        $sql .= "INSERT IGNORE INTO measure (timestamp, sensor, class, field, value1)
-        VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";
-      }
+      VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasslong."', 2, '".$record['lng']."');";
     }
+    
+    $sql .= "INSERT IGNORE INTO measure (timestamp, sensor, class, field, value1)
+    VALUES ('".$record['stamp']."', '$sensor', '".Config::$gpsclasssat."', 3, '".$record['sat']."');";
+    
+    //Get last record timestamp
+    if ($lastid == $record['id'] && new DateTime($record['stamp']) > $minsago) {$lastrecord = $record['stamp'];}
   }
-  
-  if ($real == 0)
+
+  if ($lastrecord == null)
   {
     $sql .= "INSERT IGNORE INTO measure (sensor, class, field, value1)
-    VALUES ('$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";  
+    VALUES ('$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";
+  } else {
+    $sql .= "INSERT IGNORE INTO measure (timestamp, sensor, class, field, value1)
+    VALUES ('$lastrecord', '$sensor', '".Config::$gpsclassvcc."', 4, '$voltage');";
   }
  
-  //$sql .= 'COMMIT;';
-
   $database->conn->multi_query($sql);
   $database->conn->close();

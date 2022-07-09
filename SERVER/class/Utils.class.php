@@ -49,4 +49,10 @@ class Utils
      return $data;
   }
 
+  public static function keepAttributes($obj, $attributes)
+  {
+    foreach ($obj as $key => $value) {
+      if (!in_array($key, $attributes)) unset ($obj->$key);
+    }
+  }
 }
