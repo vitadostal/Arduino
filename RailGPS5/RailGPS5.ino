@@ -8,7 +8,7 @@
 
 #define DEVBAUD  9600
 #define SERBAUD 38400
-#define FW "FIRMWARE 2021-08-12/D"
+#define FW "FIRMWARE 2022-06-20/E"
 #define MINDATETIME  777550000
 #define MAXDATETIME 4294967295
 
@@ -74,7 +74,7 @@
 #endif
 
 #ifndef BTSCHECK
-#define BTSCHECK 1                                         //Use SIM module capabilities to compute position (triangulation)
+#define BTSCHECK 0                                         //Use SIM module capabilities to compute position (triangulation)
 #endif
 
 #ifndef SENSOR
@@ -116,7 +116,7 @@ const int  address  PROGMEM = 0x50;                        //Memory chip address
 const char c0[]     PROGMEM = "AT";
 const char c1[]     PROGMEM = "AT+IPR=";
 const char c2[]     PROGMEM = "AT+CBC";
-const char c3[]     PROGMEM = "AT+CSTT=\"internet\",\"\",\"\"";
+const char c3[]     PROGMEM = "AT+CSTT=\"lpwa.vodafone.com\",\"easy\",\"connect\"";
 const char c4[]     PROGMEM = "AT+CIICR";
 const char c5[]     PROGMEM = "AT+CIPSTATUS";
 const char c6[]     PROGMEM = "AT+CIFSR";
