@@ -8,7 +8,7 @@
 
 #define DEVBAUD  9600
 #define SERBAUD 38400
-#define FW "FIRMWARE 2022-06-20/E"
+#define FW "FIRMWARE 2022-08-17/F"
 #define MINDATETIME  777550000
 #define MAXDATETIME 4294967295
 
@@ -74,7 +74,19 @@
 #endif
 
 #ifndef BTSCHECK
-#define BTSCHECK 0                                         //Use SIM module capabilities to compute position (triangulation)
+#define BTSCHECK 1                                         //Use SIM module capabilities to compute position (triangulation)
+#endif
+
+#ifndef APNURL
+#define APNURL "internet"                                  //APN address
+#endif
+
+#ifndef APNUSR
+#define APNUSR ""                                          //APN username
+#endif
+
+#ifndef APNPAS
+#define APNPAS ""                                          //APN password
 #endif
 
 #ifndef SENSOR
@@ -116,7 +128,7 @@ const int  address  PROGMEM = 0x50;                        //Memory chip address
 const char c0[]     PROGMEM = "AT";
 const char c1[]     PROGMEM = "AT+IPR=";
 const char c2[]     PROGMEM = "AT+CBC";
-const char c3[]     PROGMEM = "AT+CSTT=\"lpwa.vodafone.com\",\"easy\",\"connect\"";
+const char c3[]     PROGMEM = "AT+CSTT=\"" APNURL "\",\"" APNUSR "\",\"" APNPAS "\"";
 const char c4[]     PROGMEM = "AT+CIICR";
 const char c5[]     PROGMEM = "AT+CIPSTATUS";
 const char c6[]     PROGMEM = "AT+CIFSR";
@@ -154,7 +166,7 @@ const char c39[]    PROGMEM = "Measure button";
 const char c40[]    PROGMEM = "Send button";
 const char c41[]    PROGMEM = " last: ";
 const char c42[]    PROGMEM = "AT+SAPBR=3,1,\"Contype\",\"GPRS\"";
-const char c43[]    PROGMEM = "AT+SAPBR=3,1,\"APN\",\"internet\"";
+const char c43[]    PROGMEM = "AT+SAPBR=3,1,\"APN\",\"" APNURL "\"";
 const char c44[]    PROGMEM = "AT+SAPBR=1,1";
 const char c45[]    PROGMEM = "AT+SAPBR=2,1";
 const char c46[]    PROGMEM = "AT+CLBS=4,1";
